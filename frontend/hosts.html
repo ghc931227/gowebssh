@@ -46,7 +46,7 @@
 <script type="application/javascript">
     $(document).ready(function (){
         $.ajax({
-            url: '/config.json',
+            url: '/config.json?_t=' + new Date().getTime(),
             success: function (res){
                 var hosts = res.sshHosts;
                 for(var i in hosts){
@@ -123,7 +123,7 @@
             append.push(hostinfo);
         });
         $.ajax({
-            url: '/config.json',
+            url: '/config.json?_t=' + new Date().getTime(),
             async: false,
             success: function (res){
                 res.sshHosts = append;

@@ -149,7 +149,7 @@
 <script type="application/javascript">
     $(document).ready(function (){
         $.ajax({
-            url: '/config.json',
+            url: '/config.json?_t=' + new Date().getTime(),
             success: function (res){
                 var hosts = res.sshHosts;
                 var proxies = res.sshProxies;

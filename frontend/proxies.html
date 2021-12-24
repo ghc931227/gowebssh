@@ -13,7 +13,7 @@
         <button onclick="checkedRow.next().after(checkedRow);" type="button" class="btn btn-outline-primary">Down</button><span>&nbsp;</span>
         <button onclick="checkedRow.remove();" type="button" class="btn btn-danger">Delete</button>
     </div>
-    <table class="table table-hover" style="margin-top: 50px;">
+    <table class="table table-hover table-bordered table-striped" style="margin-top: 50px;">
         <thead>
         <tr>
             <th><input type="radio" value="false" disabled></th>
@@ -46,7 +46,7 @@
 <script type="application/javascript">
     $(document).ready(function (){
         $.ajax({
-            url: '/config.json',
+            url: '/config.json?_t=' + new Date().getTime(),
             success: function (res){
                 var proxies = res.sshProxies;
                 for(var i in proxies){
@@ -95,7 +95,7 @@
             '    <input class="form-control" type="password" onfocus="$(this).attr(\'type\', \'\')" onblur="$(this).attr(\'type\', \'password\')" value="$password"/>' +
             '  </td>' +
             '</tr>';
-        $('tbody').append($(
+        $tr = $(
             tr
                 .replace('$name', info.name)
                 .replace('$type', info.type)
@@ -103,7 +103,9 @@
                 .replace('$port', info.port)
                 .replace('$username', info.username)
                 .replace('$password', info.password)
-        ));
+        );
+        $tr.find('select').eq(0).val(info.type)
+        $('tbody').append($tr);
     }
 
     $('#submit').click(function () {
@@ -121,7 +123,7 @@
             append.push(hostinfo);
         });
         $.ajax({
-            url: '/config.json',
+            url: '/config.json?_t=' + new Date().getTime(),
             async: false,
             success: function (res){
                 res.sshProxies = append;
