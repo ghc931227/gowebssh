@@ -1,4 +1,4 @@
-module github.com/leffss/gowebssh
+module github.com/ghc931227/gowebssh
 
 go 1.14
 

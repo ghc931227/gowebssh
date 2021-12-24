@@ -20,11 +20,20 @@ var sessionmap = make(map[string]*WebSSH)
 
 func main() {
 	var serveport string
-	flag.StringVar(&serveport, "p", "2223", "服务端口号，默认为2223")
-	//http.Handle("/", http.FileServer(http.Dir("./static")))
+	flag.StringVar(&serveport, "p", "2223", "server port，default 2223")
+	flag.Parse()
+
+	//http.Handle("/", http.FileServer(http.Dir("./frontend")))
 	http.Handle("/", http.FileServer(FS(false)))
 	http.HandleFunc("/config.json", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, GetCurrentDirectory()+"/config.json")
+		w.Header().Add("Content-Type", "application/json")
+		file := GetCurrentDirectory() + "/config.json"
+		_, err := os.Stat(file)
+		if err != nil {
+			io.WriteString(w, "{}")
+		} else {
+			http.ServeFile(w, r, file)
+		}
 	})
 	http.HandleFunc("/save", func(w http.ResponseWriter, r *http.Request) {
 		config := r.FormValue("config")
@@ -104,7 +113,10 @@ func main() {
 	})
 
 	log.Println("start webssh server @port " + serveport)
-	_ = http.ListenAndServe(":"+serveport, nil)
+	err := http.ListenAndServe(":"+serveport, nil)
+	if err != nil {
+		log.Println("start faild:", err)
+	}
 }
 
 func GetCurrentDirectory() string {

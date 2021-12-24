@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title> WebSSH </title>
+    <link href="img/favicon.png" rel="icon" type="image/png"/>
+    <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+    <link href="css/xterm.min.css" rel="stylesheet" type="text/css"/>
+    <link href="css/fullscreen.min.css" rel="stylesheet" type="text/css"/>
+    <link href="css/toastr.min.css" rel="stylesheet">
+    <style>
+        .row {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            width: 500px;
+        }
+
+        .container {
+            margin-top: 20px;
+        }
+
+        .col{
+            left:50%;
+        }
+
+        .hide{
+            display: none;
+        }
+    </style>
+</head>
+<body class="hide">
+<div id="waiter" class="hide"> Connecting ... </div>
+<div class="container form-container">
+    <form id="connect" action="/ssh" method="post" enctype="multipart/form-data">
+        <input type="hidden" id="term" name="term" value="xterm-256color">
+        <input type="hidden" name="cols" value="80"/>
+        <input type="hidden" name="rows" value="24"/>
+
+        <div class="row">
+            <div class="col">
+                <label for="hostselect">Please Select Host...</label>
+                <select id="hostselect" class="form-control custom-select">
+                    <option value="">None</option>
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="proxyselect">Please Select Proxy...</label>
+                <select id="proxyselect" class="form-control custom-select">
+                    <option value="">None</option>
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="hostname">Hostname</label>
+                <input id="hostname" class="form-control" type="text" name="hostname" value=""/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="port">Port</label>
+                <input id="port" class="form-control" type="text" name="port" value=""/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="username">UserName</label>
+                <input id="username" class="form-control" type="text" name="username" value=""/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="privatekeyfile">PrivateKey</label>
+                <input id="privatekeyfile" class="form-control" type="file" name="privatekeyfile" value=""/>
+                <input id="privatekey" class="form-control" type="hidden" name="privatekey" value=""/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="password">Password</label>
+                <input id="password" class="form-control" type="password" name="password" placeholder="" value=""/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label for="command">Command</label>
+                <textarea id="command" class="form-control" name="command" placeholder="Default command when login" ></textarea>
+            </div>
+        </div>
+        <div class="row proxyoption">
+            <div class="col">
+                <label for="proxytype">ProxyType</label>
+                <input id="proxytype" class="form-control" name="proxytype" placeholder="" value=""/>
+            </div>
+        </div>
+        <div class="row proxyoption">
+            <div class="col">
+                <label for="proxyhost">ProxyHost</label>
+                <input id="proxyhost" class="form-control" name="proxyhost" placeholder="" value=""/>
+            </div>
+        </div>
+        <div class="row proxyoption">
+            <div class="col">
+                <label for="proxyport">ProxyPort</label>
+                <input id="proxyport" class="form-control" name="proxyport" placeholder="" value=""/>
+            </div>
+        </div>
+        <div class="row proxyoption">
+            <div class="col">
+                <label for="proxyuser">ProxyUser</label>
+                <input id="proxyuser" class="form-control" name="proxyuser" placeholder="" value=""/>
+            </div>
+        </div>
+        <div class="row proxyoption">
+            <div class="col">
+                <label for="proxypassword">ProxyPassword</label>
+                <input id="proxypassword" type="password" class="form-control" name="proxypassword" placeholder="" value=""/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label></label>
+                <button type="submit" class="btn btn-primary">Connect</button>
+                <button type="button" onclick="window.location.href = '/hosts.html';" class="btn btn-secondary">Edit Hosts</button>
+                <button type="button" onclick="window.location.href = '/proxies.html';" class="btn btn-secondary">Edit Proxies</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="container">
+    <div id="status" style="color: red;"></div>
+    <div id="terminal"></div>
+    <br>
+</div>
+
+<script src="js/jquery.min.js"></script>
+<script src="js/zmodem.devel.js"></script>
+<script src="js/popper.min.js"></script>
+<script src="js/xterm.min.js"></script>
+<script src="js/xterm-addon-fit.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script src="js/bootbox.min.js"></script>
+<script src="js/toastr.min.js"></script>
+<script src="js/main.js"></script>
+
+<script type="application/javascript">
+    $(document).ready(function (){
+        $.ajax({
+            url: '/config.json',
+            success: function (res){
+                var hosts = res.sshHosts;
+                var proxies = res.sshProxies;
+                for(var i in hosts){
+                    var hostinfo = hosts[i];
+                    if(hostinfo){
+                        var option = $('<option>' + hostinfo.name + '</option>');
+                        option[0].hostinfo = hostinfo;
+                        $('#hostselect').append(option);
+                    }
+                }
+                for(var i in proxies){
+                    var proxyinfo = proxies[i];
+                    if(proxyinfo){
+                        var option = $('<option>' + proxyinfo.name + '</option>');
+                        option[0].proxyinfo = proxyinfo;
+                        $('#proxyselect').append(option);
+                    }
+                }
+
+                $('#hostselect').change(function(){
+                    if($(this).val()){
+                        var hostinfo = $(this).find('option:selected')[0].hostinfo;
+                        $('#hostname').val(hostinfo.hostname);
+                        $('#port').val(hostinfo.port);
+                        $('#username').val(hostinfo.username);
+                        $('#password').val(hostinfo.password);
+                        $('#privatekey').val(hostinfo.privatekey);
+                        $('#privatekeyfile').val('');
+                        $('#command').val(hostinfo.command);
+                    }else{
+                        $('#hostname').val('');
+                        $('#port').val('');
+                        $('#username').val('');
+                        $('#password').val('');
+                        $('#privatekey').val('');
+                        $('#privatekeyfile').val('');
+                        $('#command').val('');
+                    }
+                });
+
+                $('#proxyselect').change(function(){
+                    if($(this).val()){
+                        var proxyinfo = $(this).find('option:selected')[0].proxyinfo;
+                        $('#proxytype').val(proxyinfo.type);
+                        $('#proxyhost').val(proxyinfo.hostname);
+                        $('#proxyport').val(proxyinfo.port);
+                        $('#proxyuser').val(proxyinfo.username);
+                        $('#proxypassword').val(proxyinfo.password);
+                        $('.proxyoption').show();
+                    }else{
+                        $('.proxyoption .form-control').val('');
+                        $('.proxyoption').hide();
+                    }
+                });
+
+                if(hosts.length > 0) $('#hostselect').trigger('change');
+                $('#proxyselect').trigger('change');
+            }
+        });
+        $('body').show();
+    });
+</script>
+</body>
+</html>

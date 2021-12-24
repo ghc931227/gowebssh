@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title> Edit Proxys </title>
+    <link href="img/favicon.png" rel="icon" type="image/png"/>
+    <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+</head>
+<body style="display: none;">
+<div class="container">
+    <div class="btn-toolbar" style="margin-top: 15%;">
+        <button onclick="checkedRow.prev().before(checkedRow);" type="button" class="btn btn-outline-primary">Up</button><span>&nbsp;</span>
+        <button onclick="checkedRow.next().after(checkedRow);" type="button" class="btn btn-outline-primary">Down</button><span>&nbsp;</span>
+        <button onclick="checkedRow.remove();" type="button" class="btn btn-danger">Delete</button>
+    </div>
+    <table class="table table-hover" style="margin-top: 50px;">
+        <thead>
+        <tr>
+            <th><input type="radio" value="false" disabled></th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>HostName</th>
+            <th>Port</th>
+            <th>UserName</th>
+            <th>Password</th>
+        </tr>
+        </thead>
+        <tbody>
+
+        </tbody>
+    </table>
+
+    <button id="add" type="button" onclick="add({});" class="btn btn-primary">Add a Host</button>
+
+    <div style="height: 50px"></div>
+
+    <form id="save" action="/save" method="post" style="margin-bottom: 15%;">
+        <textarea id="config" name="config" style="display: none"></textarea>
+        <button id="submit" type="submit" class="btn btn-primary">Save</button>
+        <button type="button" onclick="window.location.href = '/';" class="btn btn-secondary">Back</button>
+    </form>
+
+</div>
+
+<script src="js/jquery.min.js"></script>
+<script type="application/javascript">
+    $(document).ready(function (){
+        $.ajax({
+            url: '/config.json',
+            success: function (res){
+                var proxies = res.sshProxies;
+                for(var i in proxies){
+                    add(proxies[i]);
+                }
+                $('body').show();
+            }
+        });
+    });
+
+    var checkedRow = null;
+
+    function add(info) {
+        info = $.extend({
+            name: '',
+            type: '',
+            hostname: '',
+            port: '',
+            username: '',
+            password: ''
+        }, info);
+        var tr = '' +
+            '<tr>' +
+            '  <td>' +
+            '    <input name="check" onchange="checkedRow=$(this).parent().parent();" type="radio" style="vertical-align: middle;"/>' +
+            '  </td>' +
+            '  <td>' +
+            '    <input class="form-control" value="$name"/>' +
+            '  </td>' +
+            '  <td>' +
+            '    <input class="form-control" title="http, sock4 or socks5" value="$type"/>' +
+            '  </td>' +
+            '  <td>' +
+            '    <input class="form-control" value="$hostname"/>' +
+            '  </td>' +
+            '  <td>' +
+            '    <input class="form-control" value="$port"/>' +
+            '  </td>' +
+            '  <td>' +
+            '    <input class="form-control" value="$username"/>' +
+            '  </td>' +
+            '  <td>' +
+            '    <input class="form-control" type="password" onfocus="$(this).attr(\'type\', \'\')" onblur="$(this).attr(\'type\', \'password\')" value="$password"/>' +
+            '  </td>' +
+            '</tr>';
+        $('tbody').append($(
+            tr
+                .replace('$name', info.name)
+                .replace('$type', info.type)
+                .replace('$hostname', info.hostname)
+                .replace('$port', info.port)
+                .replace('$username', info.username)
+                .replace('$password', info.password)
+        ));
+    }
+
+    $('#submit').click(function () {
+        var append = [];
+        $('tbody tr').each(function () {
+            var inputs = $(this).find('.form-control');
+            var hostinfo = {
+                name: inputs.eq(0).val(),
+                type: inputs.eq(1).val(),
+                hostname: inputs.eq(2).val(),
+                port: inputs.eq(3).val(),
+                username: inputs.eq(4).val(),
+                password: inputs.eq(5).val()
+            };
+            append.push(hostinfo);
+        });
+        $.ajax({
+            url: '/config.json',
+            async: false,
+            success: function (res){
+                res.sshProxies = append;
+                $('#config').text(JSON.stringify(res, 0, 4));
+            }
+        });
+    });
+</script>
+</body>
+</html>

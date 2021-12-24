@@ -292,7 +292,11 @@ func (ws *WebSSH) server() error {
 	// Create ssh.AuthMethod
 	var authMethod ssh.AuthMethod
 	if ws.privatekey != "" {
-		authMethod, err = sshlib.CreateAuthMethodPublicKey(ws.privatekey, ws.password)
+		signer, err := sshlib.CreateSignerPublicKeyData([]byte(ws.privatekey), ws.password)
+		if err != nil {
+			return err
+		}
+		authMethod = ssh.PublicKeys(signer)
 		if err != nil {
 			return err
 		}
