@@ -1,4 +1,4 @@
-package gowebssh
+package main
 
 import (
 	"io/ioutil"
@@ -7,8 +7,10 @@ import (
 )
 
 var (
-	DefaultTerm = TermXterm
+	DefaultTerm        = TermXterm256Color
 	DefaultConnTimeout = 15 * time.Second
-	DefaultLogger = log.New(ioutil.Discard, "[webssh] ", log.Ltime|log.Ldate)
-	DefaultBuffSize = uint32(8192)
+	DefaultLogger      = log.New(ioutil.Discard, "[webssh] ", log.Ltime|log.Ldate)
+	DefaultBuffSize    = uint32(8192)
+	DefaultCols        = 80
+	DefaultRows        = 24
 )

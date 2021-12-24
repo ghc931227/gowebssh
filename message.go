@@ -1,4 +1,4 @@
-package gowebssh
+package main
 
 type messageType string
 
@@ -14,7 +14,7 @@ const (
 	messageTypeResize    = "resize"
 	messageTypeIgnore    = "ignore"
 	messageTypeConsole   = "console"
-	messageTypeAlert   	 = "alert"
+	messageTypeAlert     = "alert"
 )
 
 type message struct {
