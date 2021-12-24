@@ -6,7 +6,7 @@
     <link href="img/favicon.png" rel="icon" type="image/png"/>
     <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
 </head>
-<body style="display: none;">
+<body>
 <div class="container">
     <div class="btn-toolbar" style="margin-top: 15%;">
         <button onclick="checkedRow.prev().before(checkedRow);" type="button" class="btn btn-outline-primary">Up</button><span>&nbsp;</span>
@@ -77,7 +77,10 @@
             '    <input class="form-control" value="$name"/>' +
             '  </td>' +
             '  <td>' +
-            '    <input class="form-control" title="http, sock4 or socks5" value="$type"/>' +
+            '    <select class="form-control" title="http or socks5" value="$type" style="min-width: 100px;">' +
+            '       <option value="socks5">socks5</option>' +
+            '       <option value="http">http</option>' +
+            '    </option>' +
             '  </td>' +
             '  <td>' +
             '    <input class="form-control" value="$hostname"/>' +
