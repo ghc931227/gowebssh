@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	internal "github.com/ghc931227/gowebssh/internal"
 	"io"
 	"io/ioutil"
 	"log"
@@ -16,7 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var sessionmap = make(map[string]*WebSSH)
+var sessionmap = make(map[string]*internal.WebSSH)
 
 func main() {
 	var serveport string
@@ -24,7 +25,7 @@ func main() {
 	flag.Parse()
 
 	//http.Handle("/", http.FileServer(http.Dir("./frontend")))
-	http.Handle("/", http.FileServer(FS(false)))
+	http.Handle("/", http.FileServer(internal.FS(false)))
 	http.HandleFunc("/config.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		file := GetCurrentDirectory() + "/config.json"
@@ -45,9 +46,9 @@ func main() {
 	})
 	http.HandleFunc("/ssh", func(w http.ResponseWriter, r *http.Request) {
 		uuid, _ := uuid.NewUUID()
-		webssh := NewWebSSH()
+		webssh := internal.NewWebSSH()
 		// term 可以使用 ansi, linux, vt100, xterm, dumb，除了 dumb外其他都有颜色显示, 默认 xterm-256color
-		webssh.SetTerm(TermXterm256Color)
+		webssh.SetTerm(internal.TermXterm256Color)
 		webssh.SetBuffSize(8192)
 		webssh.SetId(uuid.String())
 		webssh.SetConnTimeOut(5 * time.Second)
