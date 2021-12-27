@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	internal "github.com/ghc931227/gowebssh/internal"
+	static "github.com/ghc931227/gowebssh/static"
 	"io"
 	"io/ioutil"
 	"log"
@@ -25,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	//http.Handle("/", http.FileServer(http.Dir("./frontend")))
-	http.Handle("/", http.FileServer(internal.FS(false)))
+	http.Handle("/", http.FileServer(static.FS(false)))
 	http.HandleFunc("/config.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		file := GetCurrentDirectory() + "/config.json"
