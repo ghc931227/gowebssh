@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"flag"
-	internal "github.com/ghc931227/gowebssh/internal"
-	static "github.com/ghc931227/gowebssh/static"
 	"io"
 	"io/ioutil"
 	"log"
@@ -13,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	internal "github.com/ghc931227/gowebssh/internal"
+	static "github.com/ghc931227/gowebssh/static"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
