@@ -151,8 +151,8 @@
         $.ajax({
             url: '/config.json?_t=' + new Date().getTime(),
             success: function (res){
-                var hosts = res.sshHosts;
-                var proxies = res.sshProxies;
+                var hosts = res.sshHosts || [];
+                var proxies = res.sshProxies || [];
                 for(var i in hosts){
                     var hostinfo = hosts[i];
                     if(hostinfo){
