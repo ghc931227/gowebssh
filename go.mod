@@ -23,7 +23,7 @@ require (
 	github.com/dchest/bcrypt_pbkdf v1.0.0 // indirect
 	github.com/geoffgarside/ber v1.2.0 // indirect
 	github.com/go-git/go-billy/v5 v5.9.2 // indirect
-	github.com/hanwen/go-fuse/v2 v2.12.1 // indirect
+	github.com/hanwen/go-fuse/v2 v2.10.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hirochachacha/go-smb2 v1.1.0 // indirect
 	github.com/kr/fs v0.1.0 // indirect
