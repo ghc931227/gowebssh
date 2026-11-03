@@ -364,7 +364,8 @@ jQuery(function($){
         this.container = this.pane.find('.terminal-container')[0];
         session_stack.append(this.pane);
 
-        this.tab = $('<li class="session-tab"><span class="tab-title"></span><span class="tab-close" title="关闭">×</span></li>');
+        this.tab = $('<li class="session-tab"><span class="tab-title"></span><span class="tab-close" data-i18n-title="tab.close">×</span></li>');
+        applyI18n(this.tab);
         this.tab.find('.tab-title').text(this.title);
         this.tab.find('.tab-close').on('click', function (e) {
             e.stopPropagation();
@@ -572,7 +573,7 @@ jQuery(function($){
         var self = this;
         var box = $(
             '<div class="term-search" style="display:none;">' +
-            '<input type="text" placeholder="搜索 (回车下一个)"/>' +
+            '<input type="text" data-i18n-placeholder="search.ph" placeholder="' + t('search.ph') + '"/>' +
             '<button type="button" class="btn btn-sm btn-light btn-prev">↑</button>' +
             '<button type="button" class="btn btn-sm btn-light btn-next">↓</button>' +
             '<button type="button" class="btn btn-sm btn-light btn-close">✕</button>' +
@@ -648,7 +649,7 @@ jQuery(function($){
             "<input id='fupload' name='fupload' type='file' style='display:none;' multiple='true'>" +
             "<i class='fa fa-cloud-upload fa-3x'></i>" +
             "<br />" +
-            "点击选择文件" +
+            t('upload.pick') +
             "</label>" +
             "<br />" +
             "<span style='margin-left:5px !important;' id='fileList'></span>" +
@@ -656,10 +657,10 @@ jQuery(function($){
 
         var upload_dialog = bootbox.dialog({
             message: uploadHtml,
-            title: "上传文件",
+            title: t('upload.title'),
             buttons: {
                 cancel: {
-                    label: '关闭',
+                    label: t('btn.close'),
                     className: 'btn-default',
                     callback: function () {
                         try {
@@ -690,7 +691,7 @@ jQuery(function($){
                     if (files_obj[i].size <= 2048 * 1024 * 1024) {
                         files.push(files_obj[i]);
                     } else {
-                        toastr.warning(files_obj[i].name + ' 超过 2048 MB, 无法上传');
+                        toastr.warning(files_obj[i].name + t('msg.tooLargeUp'));
                     }
                 }
                 function forceClose() {
@@ -705,7 +706,7 @@ jQuery(function($){
                     forceClose();
                     return;
                 } else if (files.length >= 25) {
-                    toastr.warning('上传文件个数不能超过 25 个');
+                    toastr.warning(t('msg.tooMany'));
                     forceClose();
                     return;
                 }
@@ -749,7 +750,7 @@ jQuery(function($){
         zsession.on('offer', function (xfer) {
             if (xfer.get_details().size > 2048 * 1024 * 1024) {
                 xfer.skip();
-                toastr.warning(xfer.get_details().name + ' 超过 2048 MB, 无法下载');
+                toastr.warning(xfer.get_details().name + t('msg.tooLargeDl'));
                 return;
             }
             var FILE_BUFFER = [];
@@ -782,7 +783,7 @@ jQuery(function($){
         self.state = CONNECTING;
         self.closed_normally = false;
         if (is_reconnect) {
-            toastr.info('正在重连 ' + self.title + ' (第 ' + self.reconnect_attempts + ' 次) ...');
+            toastr.info(t('msg.reconnect').replace('{t}', self.title).replace('{n}', self.reconnect_attempts));
         }
 
         $.ajax({
@@ -936,7 +937,7 @@ jQuery(function($){
         }
         self.reconnect_attempts += 1;
         if (self.reconnect_attempts > MAX_RECONNECT) {
-            toastr.error(self.title + ' 连接已断开，自动重连失败。');
+            toastr.error(self.title + t('msg.disconnectFail'));
             log_status('Connection lost: ' + self.title, true);
             return;
         }
@@ -1009,7 +1010,7 @@ jQuery(function($){
 
     $('#sftp-toggle').on('click', function () {
         if (!active_session || !active_session.id) {
-            toastr.warning('请先连接会话');
+            toastr.warning(t('msg.noSession'));
             return;
         }
         if (sftp_panel.hasClass('hide')) {
@@ -1036,9 +1037,9 @@ jQuery(function($){
 
     function sftp_err(resp) {
         if (resp.status === 401) {
-            toastr.error('认证失败，请刷新页面重新登录');
+            toastr.error(t('msg.authFailed'));
         } else {
-            toastr.error('SFTP 操作失败: ' + (resp.responseText || resp.statusText));
+            toastr.error(t('msg.sftpFail') + (resp.responseText || resp.statusText));
         }
     }
 
@@ -1066,10 +1067,10 @@ jQuery(function($){
             var full = sftp_path_input.val().replace(/\/$/, '') + '/' + item.name;
             var actions = '';
             if (!item.isdir) {
-                actions += '<button type="button" class="btn btn-xs btn-primary btn-sftp-dl" data-path="' + full + '">下载</button> ';
+                actions += '<button type="button" class="btn btn-xs btn-primary btn-sftp-dl" data-path="' + full + '">' + t('btn.download') + '</button> ';
             }
-            actions += '<button type="button" class="btn btn-xs btn-default btn-sftp-ren" data-path="' + full + '">改名</button> ';
-            actions += '<button type="button" class="btn btn-xs btn-danger btn-sftp-del" data-path="' + full + '">删除</button>';
+            actions += '<button type="button" class="btn btn-xs btn-default btn-sftp-ren" data-path="' + full + '">' + t('btn.rename') + '</button> ';
+            actions += '<button type="button" class="btn btn-xs btn-danger btn-sftp-del" data-path="' + full + '">' + t('btn.delete') + '</button>';
             rows += '<tr>' +
                 '<td class="sftp-name ' + (item.isdir ? 'sftp-dir' : 'sftp-file') + '" data-path="' + full + '" data-isdir="' + item.isdir + '">' +
                 (item.isdir ? '📁 ' : '📄 ') + item.name + '</td>' +
@@ -1081,7 +1082,7 @@ jQuery(function($){
         });
         $('#sftp-list').html(
             '<table class="table table-striped table-hover"><thead><tr>' +
-            '<th>名称</th><th>大小</th><th>权限</th><th>修改时间</th><th>操作</th>' +
+            '<th>' + t('th.name') + '</th><th>' + t('th.size') + '</th><th>' + t('th.perm') + '</th><th>' + t('th.mtime') + '</th><th>' + t('th.actions') + '</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table>'
         );
 
@@ -1099,7 +1100,7 @@ jQuery(function($){
         });
         $('#sftp-list .btn-sftp-del').off('click').on('click', function () {
             var p = $(this).data('path');
-            if (!confirm('确认删除 ' + p + ' ?')) {
+            if (!confirm(t('msg.confirmDelete') + p + ' ?')) {
                 return;
             }
             $.post(sftp_url('/sftp/delete', { id: active_session.id }), { id: active_session.id, path: p })
@@ -1108,7 +1109,7 @@ jQuery(function($){
         });
         $('#sftp-list .btn-sftp-ren').off('click').on('click', function () {
             var p = $(this).data('path');
-            var newName = prompt('新名称:', p.split('/').pop());
+            var newName = prompt(t('prompt.newName'), p.split('/').pop());
             if (!newName) {
                 return;
             }
@@ -1146,7 +1147,7 @@ jQuery(function($){
                 }, 1000);
             });
         }).catch(function (e) {
-            toastr.error('下载失败: ' + e.message);
+            toastr.error(t('msg.downloadFail') + e.message);
         });
     }
 
@@ -1166,7 +1167,7 @@ jQuery(function($){
         if (!active_session || !active_session.id) {
             return;
         }
-        var name = prompt('目录名:');
+        var name = prompt(t('prompt.dirname'));
         if (!name) {
             return;
         }
@@ -1182,10 +1183,10 @@ jQuery(function($){
     // 新建文件：弹窗输入文本内容后上传（内容为空也会创建空文件）
     $('#sftp-newfile').on('click', function () {
         if (!active_session || !active_session.id) {
-            toastr.warning('没有活动会话');
+            toastr.warning(t('msg.noActiveSession'));
             return;
         }
-        var name = prompt('文件名:');
+        var name = prompt(t('prompt.filename'));
         if (!name) {
             return;
         }
@@ -1197,11 +1198,11 @@ jQuery(function($){
         var $ed = $(
             '<div id="sftp-editor">' +
             '  <div class="sftp-editor-box">' +
-            '    <div class="sftp-editor-head">新建文件: ' + $('<i>').text(filename).html() + '</div>' +
-            '    <textarea id="sftp-editor-text" placeholder="输入文件内容（可以为空）" spellcheck="false"></textarea>' +
+            '    <div class="sftp-editor-head">' + t('editor.title') + $('<i>').text(filename).html() + '</div>' +
+            '    <textarea id="sftp-editor-text" placeholder="' + t('ph.editor') + '" spellcheck="false"></textarea>' +
             '    <div class="sftp-editor-foot">' +
-            '      <button type="button" class="btn btn-sm btn-secondary" id="sftp-editor-cancel">取消</button>' +
-            '      <button type="button" class="btn btn-sm btn-primary" id="sftp-editor-ok">确定并上传</button>' +
+            '      <button type="button" class="btn btn-sm btn-secondary" id="sftp-editor-cancel">' + t('btn.cancel') + '</button>' +
+            '      <button type="button" class="btn btn-sm btn-primary" id="sftp-editor-ok">' + t('btn.okUpload') + '</button>' +
             '    </div>' +
             '  </div>' +
             '</div>'
@@ -1239,7 +1240,7 @@ jQuery(function($){
             processData: false,
             contentType: false
         }).done(function () {
-            toastr.success('文件已创建: ' + filename);
+            toastr.success(t('msg.fileCreated') + filename);
             sftp_list(sftp_path_input.val());
         }).fail(function (resp) {
             sftp_err(resp);
@@ -1257,7 +1258,7 @@ jQuery(function($){
 
         function uploadNext() {
             if (i >= files.length) {
-                toastr.success('全部上传完成');
+                toastr.success(t('msg.allUploaded'));
                 sftp_list(sftp_path_input.val());
                 return;
             }
@@ -1273,18 +1274,18 @@ jQuery(function($){
                 if (e.lengthComputable) {
                     var percent = Math.round(e.loaded / e.total * 100);
                     toastr.clear();
-                    toastr.info('上传 ' + file.name + ': ' + percent + '%');
+                    toastr.info(t('msg.uploading') + file.name + ': ' + percent + '%');
                 }
             };
             xhr.onload = function () {
                 if (xhr.status !== 200) {
-                    toastr.error('上传 ' + file.name + ' 失败: ' + xhr.responseText);
+                    toastr.error(t('msg.uploading') + file.name + t('msg.uploadFail') + xhr.responseText);
                 }
                 i += 1;
                 uploadNext();
             };
             xhr.onerror = function () {
-                toastr.error('上传 ' + file.name + ' 失败');
+                toastr.error(t('msg.uploading') + file.name + t('msg.uploadFailShort'));
                 i += 1;
                 uploadNext();
             };

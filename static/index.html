@@ -160,6 +160,9 @@
             padding: 14px 20px;
             font-size: 16px;
             font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .form-card-body {
@@ -402,46 +405,49 @@
         <input type="hidden" name="rows" value="24"/>
 
         <div class="form-card">
-            <div class="form-card-head">SSH 连接</div>
+            <div class="form-card-head">
+                <span data-i18n="head.title">SSH 连接</span>
+                <span class="lang-switch"></span>
+            </div>
             <div class="form-card-body">
                 <div class="row">
-                    <label for="hostselect">已保存主机</label>
+                    <label for="hostselect" data-i18n="label.savedHosts">已保存主机</label>
                     <select id="hostselect" class="form-control custom-select">
                         <option value="">None</option>
                     </select>
                 </div>
                 <div class="row">
-                    <label for="proxyselect">连接代理（可选）</label>
+                    <label for="proxyselect" data-i18n="label.proxy">连接代理（可选）</label>
                     <select id="proxyselect" class="form-control custom-select">
                         <option value="">None</option>
                     </select>
                 </div>
                 <div class="form-grid">
                     <div class="row">
-                        <label for="hostname">主机地址</label>
-                        <input id="hostname" class="form-control" type="text" name="hostname" value="" placeholder="例：192.168.1.10"/>
+                        <label for="hostname" data-i18n="label.hostname">主机地址</label>
+                        <input id="hostname" class="form-control" type="text" name="hostname" value="" data-i18n-placeholder="ph.hostname" placeholder="例：192.168.1.10"/>
                     </div>
                     <div class="row">
-                        <label for="port">端口</label>
+                        <label for="port" data-i18n="label.port">端口</label>
                         <input id="port" class="form-control" type="text" name="port" value="" placeholder="22"/>
                     </div>
                     <div class="row">
-                        <label for="username">用户名</label>
+                        <label for="username" data-i18n="label.username">用户名</label>
                         <input id="username" class="form-control" type="text" name="username" value="" autocomplete="username"/>
                     </div>
                     <div class="row">
-                        <label for="password">密码</label>
+                        <label for="password" data-i18n="label.password">密码</label>
                         <input id="password" class="form-control" type="password" name="password" placeholder="" value="" autocomplete="current-password"/>
                     </div>
                 </div>
                 <div class="row">
-                    <label for="privatekeyfile">私钥 PrivateKey（可选，优先于密码）</label>
+                    <label for="privatekeyfile" data-i18n="label.privatekey">私钥 PrivateKey（可选，优先于密码）</label>
                     <input id="privatekeyfile" class="form-control" type="file" name="privatekeyfile" value=""/>
                     <input id="privatekey" class="form-control" type="hidden" name="privatekey" value=""/>
                 </div>
                 <div class="form-grid">
                     <div class="row">
-                        <label for="encoding">编码</label>
+                        <label for="encoding" data-i18n="label.encoding">编码</label>
                         <select id="encoding" class="form-control" name="encoding">
                             <option value="UTF-8">UTF-8</option>
                             <option value="GBK">GBK</option>
@@ -449,39 +455,39 @@
                         </select>
                     </div>
                     <div class="row">
-                        <label for="command">登录后命令（可选）</label>
-                        <input id="command" class="form-control" type="text" name="command" placeholder="登录后自动执行"/>
+                        <label for="command" data-i18n="label.command">登录后命令（可选）</label>
+                        <input id="command" class="form-control" type="text" name="command" data-i18n-placeholder="ph.command" placeholder="登录后自动执行"/>
                     </div>
                 </div>
                 <div class="proxy-section proxyoption">
-                    <div class="proxy-title">代理设置</div>
+                    <div class="proxy-title" data-i18n="proxy.title">代理设置</div>
                     <div class="form-grid">
                         <div class="row">
-                            <label for="proxytype">类型</label>
-                            <input id="proxytype" class="form-control" name="proxytype" placeholder="socks5 / http" value=""/>
+                            <label for="proxytype" data-i18n="label.proxytype">类型</label>
+                            <input id="proxytype" class="form-control" name="proxytype" data-i18n-placeholder="ph.proxytype" placeholder="socks5 / http" value=""/>
                         </div>
                         <div class="row">
-                            <label for="proxyhost">地址</label>
+                            <label for="proxyhost" data-i18n="label.proxyhost">地址</label>
                             <input id="proxyhost" class="form-control" name="proxyhost" placeholder="" value=""/>
                         </div>
                         <div class="row">
-                            <label for="proxyport">端口</label>
+                            <label for="proxyport" data-i18n="label.port">端口</label>
                             <input id="proxyport" class="form-control" name="proxyport" placeholder="" value=""/>
                         </div>
                         <div class="row">
-                            <label for="proxyuser">用户名</label>
+                            <label for="proxyuser" data-i18n="label.username">用户名</label>
                             <input id="proxyuser" class="form-control" name="proxyuser" placeholder="" value=""/>
                         </div>
                     </div>
                     <div class="row">
-                        <label for="proxypassword">密码</label>
+                        <label for="proxypassword" data-i18n="label.password">密码</label>
                         <input id="proxypassword" type="password" class="form-control" name="proxypassword" placeholder="" value=""/>
                     </div>
                 </div>
                 <div class="row form-actions">
-                    <button type="submit" class="btn btn-primary">连 接</button>
-                    <button type="button" onclick="window.location.href = '/hosts.html';" class="btn btn-secondary">主机管理</button>
-                    <button type="button" onclick="window.location.href = '/proxies.html';" class="btn btn-secondary">代理管理</button>
+                    <button type="submit" class="btn btn-primary" data-i18n="btn.connect">连 接</button>
+                    <button type="button" onclick="window.location.href = '/hosts.html';" class="btn btn-secondary" data-i18n="btn.hosts">主机管理</button>
+                    <button type="button" onclick="window.location.href = '/proxies.html';" class="btn btn-secondary" data-i18n="btn.proxies">代理管理</button>
                 </div>
             </div>
         </div>
@@ -495,8 +501,9 @@
 <!-- 终端多标签视图 -->
 <div id="term-view" class="hide">
     <ul id="tabbar">
-        <li class="tab-new" id="tab-new" title="新建连接">＋</li>
-        <li class="tab-action" id="sftp-toggle" title="文件管理">文件管理</li>
+        <li class="tab-new" id="tab-new" data-i18n-title="tab.new" title="新建连接">＋</li>
+        <li class="tab-action" id="sftp-toggle" data-i18n="tab.sftp" title="文件管理">文件管理</li>
+        <li class="tab-action" style="background:#3c8dbc;padding:4px 8px;"><span class="lang-switch"></span></li>
     </ul>
     <div id="session-stack"></div>
 </div>
@@ -506,15 +513,15 @@
     <div class="sftp-header">
         <strong>SFTP</strong>
         <input id="sftp-path" type="text" placeholder="/remote/path" spellcheck="false"/>
-        <button type="button" class="btn btn-sm btn-light" id="sftp-go">前往</button>
-        <button type="button" class="btn btn-sm btn-light" id="sftp-up">上级</button>
+        <button type="button" class="btn btn-sm btn-light" id="sftp-go" data-i18n="sftp.go">前往</button>
+        <button type="button" class="btn btn-sm btn-light" id="sftp-up" data-i18n="sftp.up">上级</button>
         <button type="button" class="btn btn-sm btn-light" id="sftp-close">✕</button>
     </div>
     <div class="sftp-toolbar">
-        <button type="button" class="btn btn-sm btn-primary" id="sftp-refresh">刷新</button>
-        <button type="button" class="btn btn-sm btn-default" id="sftp-mkdir">新建目录</button>
-        <button type="button" class="btn btn-sm btn-default" id="sftp-newfile">新建文件</button>
-        <button type="button" class="btn btn-sm btn-default" id="sftp-upload-btn">上传文件</button>
+        <button type="button" class="btn btn-sm btn-primary" id="sftp-refresh" data-i18n="sftp.refresh">刷新</button>
+        <button type="button" class="btn btn-sm btn-default" id="sftp-mkdir" data-i18n="sftp.mkdir">新建目录</button>
+        <button type="button" class="btn btn-sm btn-default" id="sftp-newfile" data-i18n="sftp.newfile">新建文件</button>
+        <button type="button" class="btn btn-sm btn-default" id="sftp-upload-btn" data-i18n="sftp.upload">上传文件</button>
         <input id="sftp-upload" type="file" multiple style="display:none;"/>
     </div>
     <div id="sftp-list"></div>
@@ -531,6 +538,7 @@
 <script src="js/bootstrap.min.js"></script>
 <script src="js/bootbox.min.js"></script>
 <script src="js/toastr.min.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/main.js"></script>
 
 <script type="application/javascript">
