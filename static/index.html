@@ -92,14 +92,19 @@
 
         /* tab 栏右侧动作按钮（文件管理等） */
         #tabbar .tab-action {
-            margin-left: auto;
             color: #fff;
             background: #27ae60;
             border-radius: 4px;
             padding: 4px 12px;
+            margin-left: 6px;
             margin-right: 6px;
             cursor: pointer;
             font-size: 13px;
+        }
+
+        /* 只有第一个动作按钮用 auto margin 吸收剩余空间，避免多个 auto margin 平分空间导致按钮偏移 */
+        #tab-new + .tab-action {
+            margin-left: auto;
         }
 
         #tabbar .tab-action:hover {
