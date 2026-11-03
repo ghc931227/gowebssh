@@ -9,131 +9,515 @@
     <link href="css/fullscreen.min.css" rel="stylesheet" type="text/css"/>
     <link href="css/toastr.min.css" rel="stylesheet">
     <style>
-        .row {
-            margin-top: 20px;
-            margin-bottom: 10px;
-            width: 500px;
+        html, body {
+            height: 100%;
+            margin: 0;
         }
 
-        .container {
-            margin-top: 20px;
+        body {
+            background: #f0f2f5;
         }
 
-        .col{
-            left:50%;
+        .hide {
+            display: none !important;
         }
 
-        .hide{
+        /* 终端模式下锁定页面滚动（滚动条只保留 xterm 自身的） */
+        body.term-mode {
+            overflow: hidden;
+        }
+
+        /* ===== 多标签会话布局 ===== */
+        #term-view {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #tabbar {
+            display: flex;
+            align-items: center;
+            background: #222d32;
+            padding: 0 4px;
+            margin: 0;
+            list-style: none;
+            flex-shrink: 0;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        #tabbar li.session-tab {
+            display: inline-flex;
+            align-items: center;
+            color: #aab;
+            background: #2c3e50;
+            padding: 6px 10px;
+            margin: 4px 2px 0;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            user-select: none;
+            max-width: 240px;
+        }
+
+        #tabbar li.session-tab.active {
+            color: #fff;
+            background: #1a222a;
+        }
+
+        #tabbar li.session-tab .tab-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 180px;
+        }
+
+        #tabbar li.session-tab .tab-close {
+            margin-left: 8px;
+            color: #889;
+            font-weight: bold;
+        }
+
+        #tabbar li.session-tab .tab-close:hover {
+            color: #fff;
+        }
+
+        #tabbar .tab-new {
+            color: #fff;
+            background: #3c8dbc;
+            border-radius: 4px;
+            padding: 4px 10px;
+            margin-left: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* tab 栏右侧动作按钮（文件管理等） */
+        #tabbar .tab-action {
+            margin-left: auto;
+            color: #fff;
+            background: #27ae60;
+            border-radius: 4px;
+            padding: 4px 12px;
+            margin-right: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        #tabbar .tab-action:hover {
+            filter: brightness(1.1);
+        }
+
+        #session-stack {
+            position: relative;
+            flex: 1;
+            background: #000;
+        }
+
+        .session-pane {
+            position: absolute;
+            inset: 0;
             display: none;
+        }
+
+        .session-pane.active {
+            display: block;
+        }
+
+        .session-pane .terminal-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .session-pane .terminal.fullscreen {
+            height: 100vh;
+        }
+
+        /* ===== 连接表单卡片 ===== */
+        .form-container {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            padding: 32px 16px;
+            margin: 0;
+        }
+
+        .form-card {
+            width: 100%;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, .12);
+            overflow: hidden;
+        }
+
+        /* 宽度约束在 form 上，flex 居中的才是完整的卡片 */
+        .form-container form {
+            width: 100%;
+            max-width: 560px;
+        }
+
+        .form-card-head {
+            background: #2c3e50;
+            color: #fff;
+            padding: 14px 20px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .form-card-body {
+            padding: 20px;
+        }
+
+        .form-card-body .row {
+            margin: 0 0 14px;
+        }
+
+        .form-card-body label {
+            font-size: 12px;
+            color: #57606a;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 14px;
+        }
+
+        .form-card-body .form-control {
+            border-radius: 6px;
+            border: 1px solid #d0d7de;
+            padding: 7px 10px;
+            font-size: 13px;
+            height: auto;
+            box-shadow: none;
+            width: 100%;
+        }
+
+        .form-card-body .form-control:focus {
+            border-color: #3c8dbc;
+            box-shadow: 0 0 0 3px rgba(60, 141, 188, .15);
+            outline: none;
+        }
+
+        /* 代理设置分区（选中代理时显示） */
+        .proxy-section {
+            border: 1px solid #e1e4e8;
+            border-radius: 8px;
+            padding: 12px 12px 2px;
+            margin-bottom: 14px;
+        }
+
+        .proxy-section .proxy-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            margin-bottom: 10px;
+        }
+
+        .proxy-section .row:last-child {
+            margin-bottom: 12px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 0;
+        }
+
+        .form-actions .btn {
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+
+        .form-actions .btn-primary {
+            flex: 1;
+            font-weight: bold;
+        }
+
+        /* 表单错误提示 */
+        #form-status-wrap {
+            max-width: 560px;
+            margin: 12px auto 0;
+            padding: 0 16px;
+            font-size: 13px;
+        }
+
+        /* ===== 搜索框 ===== */
+        .term-search {
+            position: absolute;
+            top: 8px;
+            right: 16px;
+            z-index: 100;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+            padding: 4px 6px;
+            display: flex;
+            gap: 4px;
+        }
+
+        .term-search input {
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 2px 6px;
+            width: 160px;
+        }
+
+        /* ===== SFTP 面板 ===== */
+        #sftp-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 420px;
+            max-width: 90vw;
+            height: 100%;
+            background: #fff;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, .3);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #sftp-panel .sftp-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px;
+            background: #2c3e50;
+            color: #fff;
+        }
+
+        #sftp-panel .sftp-header input {
+            flex: 1;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 3px 6px;
+        }
+
+        #sftp-panel .sftp-toolbar {
+            display: flex;
+            gap: 6px;
+            padding: 6px 8px;
+            background: #ecf0f1;
+            border-bottom: 1px solid #ddd;
+        }
+
+        #sftp-list {
+            flex: 1;
+            overflow: auto;
+            margin: 0;
+        }
+
+        #sftp-list table {
+            width: 100%;
+            font-size: 12px;
+            margin-bottom: 0;
+        }
+
+        #sftp-list th, #sftp-list td {
+            padding: 4px 6px;
+            white-space: nowrap;
+        }
+
+        #sftp-list td.sftp-name {
+            max-width: 170px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #sftp-list .sftp-dir {
+            color: #3c8dbc;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #sftp-list .sftp-file {
+            cursor: pointer;
+        }
+
+        /* ===== 新建文件文本编辑弹窗 ===== */
+        #sftp-editor {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .45);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #sftp-editor .sftp-editor-box {
+            width: 640px;
+            max-width: 92vw;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, .35);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 82vh;
+        }
+
+        #sftp-editor .sftp-editor-head {
+            background: #2c3e50;
+            color: #fff;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            word-break: break-all;
+        }
+
+        #sftp-editor textarea {
+            flex: 1;
+            min-height: 260px;
+            border: none;
+            outline: none;
+            resize: vertical;
+            padding: 12px 14px;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        #sftp-editor .sftp-editor-foot {
+            padding: 10px 14px;
+            background: #ecf0f1;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
         }
     </style>
 </head>
-<body class="hide">
+<body>
 <div id="waiter" class="hide"> Connecting ... </div>
-<div class="container form-container">
+
+<!-- 连接表单视图 -->
+<div class="form-container" id="form-view">
     <form id="connect" action="/ssh" method="post" enctype="multipart/form-data">
         <input type="hidden" id="term" name="term" value="xterm-256color">
         <input type="hidden" name="cols" value="80"/>
         <input type="hidden" name="rows" value="24"/>
 
-        <div class="row">
-            <div class="col">
-                <label for="hostselect">Please Select Host...</label>
-                <select id="hostselect" class="form-control custom-select">
-                    <option value="">None</option>
-                </select>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label for="proxyselect">Please Select Proxy...</label>
-                <select id="proxyselect" class="form-control custom-select">
-                    <option value="">None</option>
-                </select>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label for="hostname">Hostname</label>
-                <input id="hostname" class="form-control" type="text" name="hostname" value=""/>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label for="port">Port</label>
-                <input id="port" class="form-control" type="text" name="port" value=""/>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label for="username">UserName</label>
-                <input id="username" class="form-control" type="text" name="username" value=""/>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label for="privatekeyfile">PrivateKey</label>
-                <input id="privatekeyfile" class="form-control" type="file" name="privatekeyfile" value=""/>
-                <input id="privatekey" class="form-control" type="hidden" name="privatekey" value=""/>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label for="password">Password</label>
-                <input id="password" class="form-control" type="password" name="password" placeholder="" value=""/>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label for="command">Command</label>
-                <textarea id="command" class="form-control" name="command" placeholder="Default command when login" ></textarea>
-            </div>
-        </div>
-        <div class="row proxyoption">
-            <div class="col">
-                <label for="proxytype">ProxyType</label>
-                <input id="proxytype" class="form-control" name="proxytype" placeholder="" value=""/>
-            </div>
-        </div>
-        <div class="row proxyoption">
-            <div class="col">
-                <label for="proxyhost">ProxyHost</label>
-                <input id="proxyhost" class="form-control" name="proxyhost" placeholder="" value=""/>
-            </div>
-        </div>
-        <div class="row proxyoption">
-            <div class="col">
-                <label for="proxyport">ProxyPort</label>
-                <input id="proxyport" class="form-control" name="proxyport" placeholder="" value=""/>
-            </div>
-        </div>
-        <div class="row proxyoption">
-            <div class="col">
-                <label for="proxyuser">ProxyUser</label>
-                <input id="proxyuser" class="form-control" name="proxyuser" placeholder="" value=""/>
-            </div>
-        </div>
-        <div class="row proxyoption">
-            <div class="col">
-                <label for="proxypassword">ProxyPassword</label>
-                <input id="proxypassword" type="password" class="form-control" name="proxypassword" placeholder="" value=""/>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <label></label>
-                <button type="submit" class="btn btn-primary">Connect</button>
-                <button type="button" onclick="window.location.href = '/hosts.html';" class="btn btn-secondary">Edit Hosts</button>
-                <button type="button" onclick="window.location.href = '/proxies.html';" class="btn btn-secondary">Edit Proxies</button>
+        <div class="form-card">
+            <div class="form-card-head">SSH 连接</div>
+            <div class="form-card-body">
+                <div class="row">
+                    <label for="hostselect">已保存主机</label>
+                    <select id="hostselect" class="form-control custom-select">
+                        <option value="">None</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <label for="proxyselect">连接代理（可选）</label>
+                    <select id="proxyselect" class="form-control custom-select">
+                        <option value="">None</option>
+                    </select>
+                </div>
+                <div class="form-grid">
+                    <div class="row">
+                        <label for="hostname">主机地址</label>
+                        <input id="hostname" class="form-control" type="text" name="hostname" value="" placeholder="例：192.168.1.10"/>
+                    </div>
+                    <div class="row">
+                        <label for="port">端口</label>
+                        <input id="port" class="form-control" type="text" name="port" value="" placeholder="22"/>
+                    </div>
+                    <div class="row">
+                        <label for="username">用户名</label>
+                        <input id="username" class="form-control" type="text" name="username" value="" autocomplete="username"/>
+                    </div>
+                    <div class="row">
+                        <label for="password">密码</label>
+                        <input id="password" class="form-control" type="password" name="password" placeholder="" value="" autocomplete="current-password"/>
+                    </div>
+                </div>
+                <div class="row">
+                    <label for="privatekeyfile">私钥 PrivateKey（可选，优先于密码）</label>
+                    <input id="privatekeyfile" class="form-control" type="file" name="privatekeyfile" value=""/>
+                    <input id="privatekey" class="form-control" type="hidden" name="privatekey" value=""/>
+                </div>
+                <div class="form-grid">
+                    <div class="row">
+                        <label for="encoding">编码</label>
+                        <select id="encoding" class="form-control" name="encoding">
+                            <option value="UTF-8">UTF-8</option>
+                            <option value="GBK">GBK</option>
+                            <option value="Big5">Big5</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label for="command">登录后命令（可选）</label>
+                        <input id="command" class="form-control" type="text" name="command" placeholder="登录后自动执行"/>
+                    </div>
+                </div>
+                <div class="proxy-section proxyoption">
+                    <div class="proxy-title">代理设置</div>
+                    <div class="form-grid">
+                        <div class="row">
+                            <label for="proxytype">类型</label>
+                            <input id="proxytype" class="form-control" name="proxytype" placeholder="socks5 / http" value=""/>
+                        </div>
+                        <div class="row">
+                            <label for="proxyhost">地址</label>
+                            <input id="proxyhost" class="form-control" name="proxyhost" placeholder="" value=""/>
+                        </div>
+                        <div class="row">
+                            <label for="proxyport">端口</label>
+                            <input id="proxyport" class="form-control" name="proxyport" placeholder="" value=""/>
+                        </div>
+                        <div class="row">
+                            <label for="proxyuser">用户名</label>
+                            <input id="proxyuser" class="form-control" name="proxyuser" placeholder="" value=""/>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <label for="proxypassword">密码</label>
+                        <input id="proxypassword" type="password" class="form-control" name="proxypassword" placeholder="" value=""/>
+                    </div>
+                </div>
+                <div class="row form-actions">
+                    <button type="submit" class="btn btn-primary">连 接</button>
+                    <button type="button" onclick="window.location.href = '/hosts.html';" class="btn btn-secondary">主机管理</button>
+                    <button type="button" onclick="window.location.href = '/proxies.html';" class="btn btn-secondary">代理管理</button>
+                </div>
             </div>
         </div>
     </form>
 </div>
 
-<div class="container">
+<div id="form-status-wrap">
     <div id="status" style="color: red;"></div>
-    <div id="terminal"></div>
-    <br>
+</div>
+
+<!-- 终端多标签视图 -->
+<div id="term-view" class="hide">
+    <ul id="tabbar">
+        <li class="tab-new" id="tab-new" title="新建连接">＋</li>
+        <li class="tab-action" id="sftp-toggle" title="文件管理">文件管理</li>
+    </ul>
+    <div id="session-stack"></div>
+</div>
+
+<!-- SFTP 文件管理面板 -->
+<div id="sftp-panel" class="hide">
+    <div class="sftp-header">
+        <strong>SFTP</strong>
+        <input id="sftp-path" type="text" placeholder="/remote/path" spellcheck="false"/>
+        <button type="button" class="btn btn-sm btn-light" id="sftp-go">前往</button>
+        <button type="button" class="btn btn-sm btn-light" id="sftp-up">上级</button>
+        <button type="button" class="btn btn-sm btn-light" id="sftp-close">✕</button>
+    </div>
+    <div class="sftp-toolbar">
+        <button type="button" class="btn btn-sm btn-primary" id="sftp-refresh">刷新</button>
+        <button type="button" class="btn btn-sm btn-default" id="sftp-mkdir">新建目录</button>
+        <button type="button" class="btn btn-sm btn-default" id="sftp-newfile">新建文件</button>
+        <button type="button" class="btn btn-sm btn-default" id="sftp-upload-btn">上传文件</button>
+        <input id="sftp-upload" type="file" multiple style="display:none;"/>
+    </div>
+    <div id="sftp-list"></div>
 </div>
 
 <script src="js/jquery.min.js"></script>
@@ -141,6 +525,9 @@
 <script src="js/popper.min.js"></script>
 <script src="js/xterm.min.js"></script>
 <script src="js/xterm-addon-fit.min.js"></script>
+<script src="js/xterm-addon-webgl.min.js"></script>
+<script src="js/xterm-addon-search.min.js"></script>
+<script src="js/xterm-addon-web-links.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
 <script src="js/bootbox.min.js"></script>
 <script src="js/toastr.min.js"></script>
@@ -180,6 +567,7 @@
                         $('#privatekey').val(hostinfo.privatekey);
                         $('#privatekeyfile').val('');
                         $('#command').val(hostinfo.command);
+                        if (hostinfo.encoding) $('#encoding').val(hostinfo.encoding);
                     }else{
                         $('#hostname').val('');
                         $('#port').val('');

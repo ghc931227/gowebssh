@@ -13,3 +13,11 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# 运行时数据与本地配置（含主机凭据，禁止提交）
+config.json
+sessions/
+
+# IDE 与临时产物
+.idea/
+.trae-html-share-packages/
