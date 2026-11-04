@@ -815,9 +815,20 @@ jQuery(function($){
             self.fit();
             self.focus();
             title_element.text = url_opts_data.title || self.title;
-            if (url_opts_data.command) {
+            // 登录后命令：优先取连接表单，其次 URL 参数（重连后同样执行，因为服务端会重新登录）
+            var auto_cmd = null;
+            try {
+                var form_cmd = self.form_data ? self.form_data.get('command') : null;
+                if (form_cmd && form_cmd.trim()) {
+                    auto_cmd = form_cmd.trim();
+                }
+            } catch (e) {}
+            if (!auto_cmd && url_opts_data.command) {
+                auto_cmd = url_opts_data.command;
+            }
+            if (auto_cmd) {
                 setTimeout(function () {
-                    self.send_stdin(url_opts_data.command + '\r');
+                    self.send_stdin(auto_cmd + '\r');
                 }, 500);
             }
         };
