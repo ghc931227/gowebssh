@@ -28,6 +28,9 @@ import (
 type sessionEntry struct {
 	ssh     *internal.WebSSH
 	created time.Time
+	// connected websocket 已接管该会话；接管后不再参与 cleanupLoop 过期清理，
+	// 由 OnClose 回调从表中移除
+	connected bool
 }
 
 // sessionStore 全局会话表（并发安全，含过期清理）
@@ -46,7 +49,7 @@ func (s *sessionStore) put(id string, ws *internal.WebSSH) {
 	s.items[id] = &sessionEntry{ssh: ws, created: time.Now()}
 }
 
-// take 取出并从待连接表中移除（websocket 接管后由 OnClose 回调真正清理）
+// take 取出会话并标记为已接管（websocket/SFTP 均通过此方法查表）
 func (s *sessionStore) take(id string) *internal.WebSSH {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -54,6 +57,7 @@ func (s *sessionStore) take(id string) *internal.WebSSH {
 	if !ok {
 		return nil
 	}
+	entry.connected = true
 	return entry.ssh
 }
 
@@ -64,7 +68,8 @@ func (s *sessionStore) remove(id string) {
 	delete(s.items, id)
 }
 
-// cleanupLoop 定期清理超过 ttl 未被 websocket 接管的会话，防止内存泄漏
+// cleanupLoop 定期清理超过 ttl 仍未被 websocket 接管的会话，防止内存泄漏
+// （已接管的会话由 OnClose 回调清理，不在此过期删除）
 func (s *sessionStore) cleanupLoop(ttl time.Duration) {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
@@ -72,7 +77,7 @@ func (s *sessionStore) cleanupLoop(ttl time.Duration) {
 			s.mu.Lock()
 			now := time.Now()
 			for id, entry := range s.items {
-				if now.Sub(entry.created) > ttl {
+				if !entry.connected && now.Sub(entry.created) > ttl {
 					log.Printf("[webssh] session %s expired (not connected within %s)", id, ttl)
 					delete(s.items, id)
 				}
