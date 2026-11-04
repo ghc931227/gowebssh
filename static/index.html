@@ -27,88 +27,54 @@
             overflow: hidden;
         }
 
-        /* ===== 多标签会话布局 ===== */
+        /* ===== 终端会话布局 ===== */
         #term-view {
             display: flex;
             flex-direction: column;
             height: 100%;
         }
 
-        #tabbar {
+        /* 终端顶部工具栏 */
+        #term-toolbar {
             display: flex;
             align-items: center;
             background: #222d32;
-            padding: 0 4px;
-            margin: 0;
-            list-style: none;
+            padding: 6px 12px;
             flex-shrink: 0;
-            overflow-x: auto;
-            white-space: nowrap;
+            line-height: 20px;
         }
 
-        #tabbar li.session-tab {
-            display: inline-flex;
-            align-items: center;
-            color: #aab;
-            background: #2c3e50;
-            padding: 6px 10px;
-            margin: 4px 2px 0;
-            border-radius: 6px 6px 0 0;
-            cursor: pointer;
-            user-select: none;
-            max-width: 240px;
-        }
-
-        #tabbar li.session-tab.active {
+        #term-toolbar .term-action {
             color: #fff;
-            background: #1a222a;
-        }
-
-        #tabbar li.session-tab .tab-title {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 180px;
-        }
-
-        #tabbar li.session-tab .tab-close {
-            margin-left: 8px;
-            color: #889;
-            font-weight: bold;
-        }
-
-        #tabbar li.session-tab .tab-close:hover {
-            color: #fff;
-        }
-
-        #tabbar .tab-new {
-            color: #fff;
-            background: #3c8dbc;
-            border-radius: 4px;
-            padding: 4px 10px;
-            margin-left: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        /* tab 栏右侧动作按钮（文件管理等） */
-        #tabbar .tab-action {
-            color: #fff;
-            background: #27ae60;
             border-radius: 4px;
             padding: 4px 12px;
-            margin-left: 6px;
-            margin-right: 6px;
+            margin-left: 8px;
             cursor: pointer;
             font-size: 13px;
+            line-height: 20px;
+            display: inline-block;
         }
 
-        /* 只有第一个动作按钮用 auto margin 吸收剩余空间，避免多个 auto margin 平分空间导致按钮偏移 */
-        #tab-new + .tab-action {
+        #term-toolbar .term-action:hover {
+            filter: brightness(1.15);
+        }
+
+        #term-toolbar #sftp-toggle {
+            background: #27ae60;
             margin-left: auto;
         }
 
-        #tabbar .tab-action:hover {
-            filter: brightness(1.1);
+        #term-toolbar #term-disconnect {
+            background: #e74c3c;
+        }
+
+        #term-toolbar .term-lang {
+            color: #fff;
+            margin-left: 10px;
+            font-size: 13px;
+            line-height: 20px;
+            display: flex;
+            align-items: center;
         }
 
         #session-stack {
@@ -120,11 +86,6 @@
         .session-pane {
             position: absolute;
             inset: 0;
-            display: none;
-        }
-
-        .session-pane.active {
-            display: block;
         }
 
         .session-pane .terminal-container {
@@ -503,13 +464,13 @@
     <div id="status" style="color: red;"></div>
 </div>
 
-<!-- 终端多标签视图 -->
+<!-- 终端视图 -->
 <div id="term-view" class="hide">
-    <ul id="tabbar">
-        <li class="tab-new" id="tab-new" data-i18n-title="tab.new" title="新建连接">＋</li>
-        <li class="tab-action" id="sftp-toggle" data-i18n="tab.sftp" title="文件管理">文件管理</li>
-        <li class="tab-action" style="background:#3c8dbc;padding:4px 8px;"><span class="lang-switch"></span></li>
-    </ul>
+    <div id="term-toolbar">
+        <span class="term-action" id="sftp-toggle" data-i18n="tab.sftp" title="文件管理">文件管理</span>
+        <span class="term-action" id="term-disconnect" data-i18n="tab.disconnect" title="断开">断开</span>
+        <span class="term-lang"><span class="lang-switch"></span></span>
+    </div>
     <div id="session-stack"></div>
 </div>
 

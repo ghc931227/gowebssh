@@ -31,9 +31,7 @@
             'btn.hosts': '主机管理',
             'btn.proxies': '代理管理',
             // 标签栏
-            'tab.new': '新建连接',
             'tab.sftp': '文件管理',
-            'tab.close': '关闭',
             'tab.disconnect': '断开',
             // SFTP 面板
             'sftp.go': '前往',
@@ -84,6 +82,8 @@
             'btn.down': '下移',
             'btn.save': '保存',
             'btn.back': '返回',
+            'page.hosts': '主机管理',
+            'page.proxies': '代理管理',
             'hosts.add': '添加主机',
             'proxies.add': '添加代理'
         },
@@ -107,9 +107,7 @@
             'btn.connect': 'Connect',
             'btn.hosts': 'Hosts',
             'btn.proxies': 'Proxies',
-            'tab.new': 'New connection',
             'tab.sftp': 'Files',
-            'tab.close': 'Close',
             'tab.disconnect': 'Disconnect',
             'sftp.go': 'Go',
             'sftp.up': 'Up',
@@ -156,6 +154,8 @@
             'btn.down': 'Down',
             'btn.save': 'Save',
             'btn.back': 'Back',
+            'page.hosts': 'Hosts',
+            'page.proxies': 'Proxies',
             'hosts.add': 'Add a Host',
             'proxies.add': 'Add a Proxy'
         }
@@ -195,10 +195,20 @@
         $('.lang-switch').each(function () {
             var next = g_lang === 'zh' ? 'EN' : '中文';
             $(this).empty().append(
-                $('<button type="button" class="btn btn-link btn-sm lang-btn" style="padding:0;color:inherit;text-decoration:underline;"></button>')
-                    .text(next)
+                $('<button type="button" class="btn lang-btn"></button>').text(next)
             );
         });
+    }
+
+    // 语言切换按钮统一样式（注入一次，所有页面生效）
+    function injectLangBtnStyle() {
+        var css = ''
+            + '.lang-btn{display:inline-block;padding:2px 10px;font-size:12px;line-height:18px;'
+            + 'color:inherit;background:transparent;border:1px solid rgba(255,255,255,.55);'
+            + 'border-radius:4px;cursor:pointer;transition:background .15s;}'
+            + '.lang-btn:hover{background:rgba(255,255,255,.18);text-decoration:none;}'
+            + '.lang-btn:focus{box-shadow:none;outline:none;}';
+        $('<style>').text(css).appendTo('head');
     }
 
     function setLang(lang) {
@@ -216,6 +226,7 @@
     window.setLang = setLang;
 
     $(function () {
+        injectLangBtnStyle();
         $(document).on('click', '.lang-btn', function () {
             setLang(g_lang === 'zh' ? 'en' : 'zh');
         });

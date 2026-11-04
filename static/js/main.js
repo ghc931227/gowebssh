@@ -41,7 +41,6 @@ jQuery(function($){
         form_view = $('#form-view'),
         form_status_wrap = $('#form-status-wrap'),
         term_view = $('#term-view'),
-        tabbar = $('#tabbar'),
         session_stack = $('#session-stack'),
         waiter = $('#waiter'),
         term_type = $('#term'),
@@ -321,27 +320,10 @@ jQuery(function($){
 
 
     // ==========================================================================
-    // 会话 (Session)：一个标签页 = 一个 websocket + 一个 xterm 实例
+    // 会话 (Session)：一个 websocket + 一个 xterm 实例（单会话模式）
     // ==========================================================================
     var sessions = [];
     var active_session = null;
-    // 服务端功能开关，默认关闭多标签（与 -tabs 参数对应）
-    var FEATURES = { tabs: false };
-
-    $.ajax({
-        url: '/features.json',
-        type: 'get',
-        dataType: 'json',
-        cache: false
-    }).done(function (res) {
-        if (res && typeof res.tabs === 'boolean') {
-            FEATURES.tabs = res.tabs;
-        }
-        if (!FEATURES.tabs) {
-            // 单会话模式：隐藏"新建连接"按钮，仅保留当前会话标题与断开按钮
-            $('#tab-new').addClass('hide');
-        }
-    });
 
     function Session(form_data, title) {
         var self = this;
@@ -363,34 +345,11 @@ jQuery(function($){
         this.pane = $('<div class="session-pane"><div class="terminal-container"></div></div>');
         this.container = this.pane.find('.terminal-container')[0];
         session_stack.append(this.pane);
-
-        this.tab = $('<li class="session-tab"><span class="tab-title"></span><span class="tab-close" data-i18n-title="tab.close">×</span></li>');
-        applyI18n(this.tab);
-        this.tab.find('.tab-title').text(this.title);
-        this.tab.find('.tab-close').on('click', function (e) {
-            e.stopPropagation();
-            self.dispose();
-        });
-        this.tab.on('click', function () {
-            self.activate();
-        });
-        $('#tab-new').before(this.tab);
-        tabbar.show();
     }
 
     Session.prototype.activate = function () {
         var self = this;
-        if (active_session === this) {
-            this.focus();
-            return;
-        }
         active_session = this;
-        $.each(sessions, function (i, s) {
-            s.pane.removeClass('active');
-            s.tab.removeClass('active');
-        });
-        this.pane.addClass('active');
-        this.tab.addClass('active');
         setTimeout(function () {
             self.fit();
             self.focus();
@@ -911,9 +870,7 @@ jQuery(function($){
             }
 
             // 标题与状态更新
-            if (active_session === self) {
-                title_element.text = default_title;
-            }
+            title_element.text = default_title;
 
             if (!is_reconnect_safe(self)) {
                 self.dispose();
@@ -960,7 +917,6 @@ jQuery(function($){
             try { self.term.dispose(); } catch (e) {}
             self.term = undefined;
         }
-        self.tab.remove();
         self.pane.remove();
         var idx = sessions.indexOf(self);
         if (idx !== -1) {
@@ -972,8 +928,6 @@ jQuery(function($){
         // 无会话时回到表单视图
         if (sessions.length === 0) {
             show_form_view();
-        } else if (active_session === null) {
-            sessions[sessions.length - 1].activate();
         }
     };
 
@@ -995,18 +949,18 @@ jQuery(function($){
     }
 
     // ==========================================================================
-    // SFTP 面板开关
-    // ==========================================================================
-
-    $('#tab-new').on('click', function () {
-        show_form_view();
-    });
-
-    // ==========================================================================
     // SFTP 文件管理
     // ==========================================================================
     var sftp_panel = $('#sftp-panel');
     var sftp_path_input = $('#sftp-path');
+
+    // 断开当前会话并返回连接表单
+    $('#term-disconnect').on('click', function () {
+        if (active_session) {
+            active_session.user_closed = true;
+            active_session.dispose();
+        }
+    });
 
     $('#sftp-toggle').on('click', function () {
         if (!active_session || !active_session.id) {
@@ -1471,11 +1425,9 @@ jQuery(function($){
         button.prop('disabled', false);
         waiter.show();
 
-        // 单会话模式（默认）：同一页面仅保留一个会话，新连接会替换旧会话
-        if (!FEATURES.tabs) {
-            while (sessions.length > 0) {
-                sessions[0].dispose();
-            }
+        // 单会话模式：同一页面仅保留一个会话，新连接会替换旧会话
+        while (sessions.length > 0) {
+            sessions[0].dispose();
         }
 
         var session = new Session(form_data, title);

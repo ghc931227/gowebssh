@@ -30,9 +30,6 @@ type sessionEntry struct {
 	created time.Time
 }
 
-// enableTabs 是否启用浏览器内多标签会话（默认关闭，-tabs 开启）
-var enableTabs bool
-
 // sessionStore 全局会话表（并发安全，含过期清理）
 type sessionStore struct {
 	mu    sync.Mutex
@@ -139,7 +136,6 @@ func main() {
 	)
 	flag.StringVar(&serveport, "p", "2223", "server port，default 2223")
 	flag.StringVar(&auth, "auth", "", "HTTP Basic 认证，格式 user:password（不设置则不需要登录）")
-	flag.BoolVar(&enableTabs, "tabs", false, "启用浏览器内多标签会话（默认关闭，同一页面仅一个会话）")
 	flag.StringVar(&certFile, "cert", "", "TLS 证书文件，设置后启用 HTTPS")
 	flag.StringVar(&keyFile, "key", "", "TLS 私钥文件")
 	flag.StringVar(&auditDir, "audit", "sessions", "会话审计记录目录（设为空字符串关闭审计）")
@@ -166,12 +162,6 @@ func main() {
 
 	// 静态资源
 	http.Handle("/", basicAuthHandler(http.FileServer(static.FS())))
-
-	// 服务端功能开关，前端据此决定是否启用多标签等特性
-	http.HandleFunc("/features.json", basicAuth(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"tabs": %t}`, enableTabs)
-	}))
 
 	// 配置文件读取（需要认证，防止泄露保存的主机密码）
 	http.HandleFunc("/config.json", basicAuth(func(w http.ResponseWriter, r *http.Request) {

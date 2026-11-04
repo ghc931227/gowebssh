@@ -89,6 +89,9 @@ type WebSSH struct {
 	stopOnce sync.Once
 	stopChan chan struct{}
 
+	// websocket 写锁 (gorilla 不允许并发写消息)
+	writeMu sync.Mutex
+
 	// 连接复用 (SFTP 等)
 	connMu   sync.Mutex
 	con      *sshlib.Connect
@@ -369,6 +372,7 @@ func (ws *WebSSH) auditWrite(data []byte) {
 }
 
 // startKeepAlive 启动 ssh 客户端保活，连接断开时自动触发清理
+// 连续 5 次保活失败（约 150 秒）才判定连接死亡，容忍短暂网络抖动
 func (ws *WebSSH) startKeepAlive(con *sshlib.Connect) {
 	if con == nil || con.Client == nil {
 		return
@@ -385,7 +389,7 @@ func (ws *WebSSH) startKeepAlive(con *sshlib.Connect) {
 				if err := con.CheckClientAlive(); err != nil {
 					failures++
 					ws.logger.Printf("(%s) ssh keepalive failed (%d): %v", ws.id, failures, err)
-					if failures >= 3 {
+					if failures >= 5 {
 						ws.logger.Printf("(%s) ssh connection dead, closing", ws.id)
 						if ws.websocket != nil {
 							_ = ws.websocket.Close()
@@ -413,10 +417,31 @@ func (ws *WebSSH) startWsPing() {
 				if ws.websocket == nil {
 					return
 				}
-				_ = ws.websocket.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
+				_ = ws.writeControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
 			}
 		}
 	}()
+}
+
+// writeMessage 线程安全地写 websocket 二进制/文本消息
+func (ws *WebSSH) writeMessage(msgType int, data []byte) error {
+	ws.writeMu.Lock()
+	defer ws.writeMu.Unlock()
+	return ws.websocket.WriteMessage(msgType, data)
+}
+
+// writeJSON 线程安全地写 websocket JSON 消息
+func (ws *WebSSH) writeJSON(v interface{}) error {
+	ws.writeMu.Lock()
+	defer ws.writeMu.Unlock()
+	return ws.websocket.WriteJSON(v)
+}
+
+// writeControl 线程安全地写 websocket 控制帧
+func (ws *WebSSH) writeControl(msgType int, data []byte, deadline time.Time) error {
+	ws.writeMu.Lock()
+	defer ws.writeMu.Unlock()
+	return ws.websocket.WriteControl(msgType, data, deadline)
 }
 
 // 处理 websocket 连接发送过来的数据
@@ -425,10 +450,11 @@ func (ws *WebSSH) server() error {
 		_ = ws.websocket.Close()
 	}()
 
-	// websocket 读超时 + pong 保活
-	_ = ws.websocket.SetReadDeadline(time.Now().Add(90 * time.Second))
+	// websocket 读超时 + pong 保活：任何消息（含 pong）都会续期，
+	// 5 分钟内既无数据也无 pong 才判定连接死亡
+	_ = ws.websocket.SetReadDeadline(time.Now().Add(5 * time.Minute))
 	ws.websocket.SetPongHandler(func(string) error {
-		return ws.websocket.SetReadDeadline(time.Now().Add(90 * time.Second))
+		return ws.websocket.SetReadDeadline(time.Now().Add(5 * time.Minute))
 	})
 	ws.startWsPing()
 
@@ -465,9 +491,9 @@ func (ws *WebSSH) server() error {
 	defer func() {
 		_ = stdin.Close()
 	}()
-	err = ws.transformOutput(session, ws.websocket)
+	err = ws.transformOutput(session)
 	if err != nil {
-		_ = ws.websocket.WriteJSON(&message{Type: messageTypeStderr, Data: []byte("get stdin & stderr channel error\r\n")})
+		_ = ws.writeJSON(&message{Type: messageTypeStderr, Data: []byte("get stdin & stderr channel error\r\n")})
 		return errors.Wrap(err, "get stdin & stderr channel error")
 	}
 
@@ -475,30 +501,30 @@ func (ws *WebSSH) server() error {
 		// exec 模式：执行命令，结束后关闭会话
 		err = session.Start(ws.command)
 		if err != nil {
-			_ = ws.websocket.WriteJSON(&message{Type: messageTypeStderr, Data: []byte("start command error\r\n")})
+			_ = ws.writeJSON(&message{Type: messageTypeStderr, Data: []byte("start command error\r\n")})
 			return errors.Wrap(err, "start command error")
 		}
 		go func() {
 			exitErr := session.Wait()
 			if exitErr != nil {
-				_ = ws.websocket.WriteJSON(&message{Type: messageTypeAlert, Data: []byte(fmt.Sprintf("command exited: %v", exitErr))})
+				_ = ws.writeJSON(&message{Type: messageTypeAlert, Data: []byte(fmt.Sprintf("command exited: %v", exitErr))})
 			}
 			// 明确告知客户端会话正常结束，前端据此跳过自动重连
-			_ = ws.websocket.WriteJSON(&message{Type: messageTypeClosed, Data: []byte("command finished")})
+			_ = ws.writeJSON(&message{Type: messageTypeClosed, Data: []byte("command finished")})
 			_ = ws.websocket.Close()
 		}()
 	} else {
 		err = session.Shell()
 		if err != nil {
-			_ = ws.websocket.WriteJSON(&message{Type: messageTypeStderr, Data: []byte("start a login shell error\r\n")})
+			_ = ws.writeJSON(&message{Type: messageTypeStderr, Data: []byte("start a login shell error\r\n")})
 			return errors.Wrap(err, "start a login shell error")
 		}
 		// 监听 shell 正常退出（如用户手动 exit），通知前端避免误触发重连
 		go func() {
 			if exitErr := session.Wait(); exitErr != nil {
-				_ = ws.websocket.WriteJSON(&message{Type: messageTypeAlert, Data: []byte(fmt.Sprintf("shell exited: %v", exitErr))})
+				_ = ws.writeJSON(&message{Type: messageTypeAlert, Data: []byte(fmt.Sprintf("shell exited: %v", exitErr))})
 			}
-			_ = ws.websocket.WriteJSON(&message{Type: messageTypeClosed, Data: []byte("session closed")})
+			_ = ws.writeJSON(&message{Type: messageTypeClosed, Data: []byte("session closed")})
 			_ = ws.websocket.Close()
 		}()
 	}
@@ -510,6 +536,8 @@ func (ws *WebSSH) server() error {
 		if err != nil {
 			return errors.Wrap(err, "websocket close or read message err")
 		}
+		// 收到任何消息都续期读超时
+		_ = ws.websocket.SetReadDeadline(time.Now().Add(5 * time.Minute))
 		// BinaryMessage 是 zmodem 数据流，则直接发送给 ssh 服务端, 可以提高 rz 上传速率
 		if msgType == websocket.BinaryMessage {
 			_, err = stdin.Write(data)
@@ -533,7 +561,7 @@ func (ws *WebSSH) server() error {
 			data, _ := UrlQueryUnescape(string(msg.Data))
 			_, err = stdin.Write([]byte(data))
 			if err != nil {
-				_ = ws.websocket.WriteJSON(&message{Type: messageTypeStderr, Data: []byte("write to stdin error\r\n")})
+				_ = ws.writeJSON(&message{Type: messageTypeStderr, Data: []byte("write to stdin error\r\n")})
 				return errors.Wrap(err, "write to stdin error")
 			}
 
@@ -546,7 +574,7 @@ func (ws *WebSSH) server() error {
 			}
 			err = session.WindowChange(msg.Rows, msg.Cols)
 			if err != nil {
-				_ = ws.websocket.WriteJSON(&message{Type: messageTypeStderr, Data: []byte("resize error\r\n")})
+				_ = ws.writeJSON(&message{Type: messageTypeStderr, Data: []byte("resize error\r\n")})
 				return errors.Wrap(err, "resize error")
 			}
 		default:
@@ -556,7 +584,7 @@ func (ws *WebSSH) server() error {
 }
 
 // 发送 ssh 会话的 stdout 和 stdin 数据到 websocket 连接
-func (ws *WebSSH) transformOutput(session *ssh.Session, conn *websocket.Conn) error {
+func (ws *WebSSH) transformOutput(session *ssh.Session) error {
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		return errors.Wrap(err, "get stdout channel error")
@@ -591,24 +619,24 @@ func (ws *WebSSH) transformOutput(session *ssh.Session, conn *websocket.Conn) er
 				// 下载多个文件）。
 				if n < 2 {
 					// 手动发送 ZModemSZEndOO
-					conn.WriteMessage(websocket.BinaryMessage, ZModemSZEndOO)
-					conn.WriteJSON(&message{Type: t, Data: buff[:n]})
+					ws.writeMessage(websocket.BinaryMessage, ZModemSZEndOO)
+					ws.writeJSON(&message{Type: t, Data: buff[:n]})
 				} else if n == 2 {
 					if buff[0] == ZModemSZEndOO[0] && buff[1] == ZModemSZEndOO[1] {
-						conn.WriteMessage(websocket.BinaryMessage, ZModemSZEndOO)
+						ws.writeMessage(websocket.BinaryMessage, ZModemSZEndOO)
 					} else {
 						// 手动发送 ZModemSZEndOO
-						conn.WriteMessage(websocket.BinaryMessage, ZModemSZEndOO)
-						conn.WriteJSON(&message{Type: t, Data: buff[:n]})
+						ws.writeMessage(websocket.BinaryMessage, ZModemSZEndOO)
+						ws.writeJSON(&message{Type: t, Data: buff[:n]})
 					}
 				} else {
 					if buff[0] == ZModemSZEndOO[0] && buff[1] == ZModemSZEndOO[1] {
-						conn.WriteMessage(websocket.BinaryMessage, buff[:2])
-						conn.WriteJSON(&message{Type: t, Data: buff[2:n]})
+						ws.writeMessage(websocket.BinaryMessage, buff[:2])
+						ws.writeJSON(&message{Type: t, Data: buff[2:n]})
 					} else {
 						// 手动发送 ZModemSZEndOO
-						conn.WriteMessage(websocket.BinaryMessage, ZModemSZEndOO)
-						conn.WriteJSON(&message{Type: t, Data: buff[:n]})
+						ws.writeMessage(websocket.BinaryMessage, ZModemSZEndOO)
+						ws.writeJSON(&message{Type: t, Data: buff[:n]})
 					}
 				}
 			} else {
@@ -616,36 +644,36 @@ func (ws *WebSSH) transformOutput(session *ssh.Session, conn *websocket.Conn) er
 					if uint32(n) == ws.buffSize {
 						// 如果读取的长度为 buffsize，则认为是在传输数据，
 						// 这样可以提高 sz 下载速率，很低概率会误判 zmodem 取消操作
-						conn.WriteMessage(websocket.BinaryMessage, buff[:n])
+						ws.writeMessage(websocket.BinaryMessage, buff[:n])
 					} else {
 						if x, ok := ByteContains(buff[:n], ZModemSZEnd); ok {
 							ws.ZModemSZ = false
 							ws.ZModemSZOO = true
-							conn.WriteMessage(websocket.BinaryMessage, ZModemSZEnd)
+							ws.writeMessage(websocket.BinaryMessage, ZModemSZEnd)
 							if len(x) != 0 {
-								conn.WriteJSON(&message{Type: messageTypeConsole, Data: x})
+								ws.writeJSON(&message{Type: messageTypeConsole, Data: x})
 							}
 						} else if _, ok := ByteContains(buff[:n], ZModemCancel); ok {
 							ws.ZModemSZ = false
-							conn.WriteMessage(websocket.BinaryMessage, buff[:n])
+							ws.writeMessage(websocket.BinaryMessage, buff[:n])
 						} else {
-							conn.WriteMessage(websocket.BinaryMessage, buff[:n])
+							ws.writeMessage(websocket.BinaryMessage, buff[:n])
 						}
 					}
 				} else if ws.ZModemRZ {
 					if x, ok := ByteContains(buff[:n], ZModemRZEnd); ok {
 						ws.ZModemRZ = false
-						conn.WriteMessage(websocket.BinaryMessage, ZModemRZEnd)
+						ws.writeMessage(websocket.BinaryMessage, ZModemRZEnd)
 						if len(x) != 0 {
-							conn.WriteJSON(&message{Type: messageTypeConsole, Data: x})
+							ws.writeJSON(&message{Type: messageTypeConsole, Data: x})
 						}
 					} else if _, ok := ByteContains(buff[:n], ZModemCancel); ok {
 						ws.ZModemRZ = false
-						conn.WriteMessage(websocket.BinaryMessage, buff[:n])
+						ws.writeMessage(websocket.BinaryMessage, buff[:n])
 					} else {
 						// rz 上传过程中服务器端还是会给客户端发送一些信息，比如心跳
-						//conn.WriteJSON(&message{Type: messageTypeConsole, Data: buff[:n]})
-						//conn.WriteMessage(websocket.BinaryMessage, buff[:n])
+						//ws.writeJSON(&message{Type: messageTypeConsole, Data: buff[:n]})
+						//ws.writeMessage(websocket.BinaryMessage, buff[:n])
 
 						startIndex := bytes.Index(buff[:n], ZModemRZCtrlStart)
 						if startIndex != -1 {
@@ -653,59 +681,59 @@ func (ws *WebSSH) transformOutput(session *ssh.Session, conn *websocket.Conn) er
 							if endIndex != -1 {
 								ctrl := append(ZModemRZCtrlStart, buff[startIndex+len(ZModemRZCtrlStart):endIndex]...)
 								ctrl = append(ctrl, ZModemRZCtrlEnd1...)
-								conn.WriteMessage(websocket.BinaryMessage, ctrl)
+								ws.writeMessage(websocket.BinaryMessage, ctrl)
 								info := append(buff[:startIndex], buff[endIndex+len(ZModemRZCtrlEnd1):n]...)
 								if len(info) != 0 {
-									conn.WriteJSON(&message{Type: messageTypeConsole, Data: info})
+									ws.writeJSON(&message{Type: messageTypeConsole, Data: info})
 								}
 							} else {
 								endIndex = bytes.Index(buff[:n], ZModemRZCtrlEnd2)
 								if endIndex != -1 {
 									ctrl := append(ZModemRZCtrlStart, buff[startIndex+len(ZModemRZCtrlStart):endIndex]...)
 									ctrl = append(ctrl, ZModemRZCtrlEnd2...)
-									conn.WriteMessage(websocket.BinaryMessage, ctrl)
+									ws.writeMessage(websocket.BinaryMessage, ctrl)
 									info := append(buff[:startIndex], buff[endIndex+len(ZModemRZCtrlEnd2):n]...)
 									if len(info) != 0 {
-										conn.WriteJSON(&message{Type: messageTypeConsole, Data: info})
+										ws.writeJSON(&message{Type: messageTypeConsole, Data: info})
 									}
 								} else {
-									conn.WriteJSON(&message{Type: messageTypeConsole, Data: buff[:n]})
+									ws.writeJSON(&message{Type: messageTypeConsole, Data: buff[:n]})
 								}
 							}
 						} else {
-							conn.WriteJSON(&message{Type: messageTypeConsole, Data: buff[:n]})
+							ws.writeJSON(&message{Type: messageTypeConsole, Data: buff[:n]})
 						}
 					}
 				} else {
 					if x, ok := ByteContains(buff[:n], ZModemSZStart); ok {
 						if ws.DisableZModemSZ {
-							conn.WriteJSON(&message{Type: messageTypeAlert, Data: []byte("sz download is disabled")})
+							ws.writeJSON(&message{Type: messageTypeAlert, Data: []byte("sz download is disabled")})
 							w.Write(ZModemCancel)
 						} else {
 							if y, ok := ByteContains(x, ZModemCancel); ok {
 								// 下载不存在的文件以及文件夹(zmodem 不支持下载文件夹)时
-								conn.WriteJSON(&message{Type: t, Data: y})
+								ws.writeJSON(&message{Type: t, Data: y})
 							} else {
 								ws.ZModemSZ = true
 								if len(x) != 0 {
-									conn.WriteJSON(&message{Type: messageTypeConsole, Data: x})
+									ws.writeJSON(&message{Type: messageTypeConsole, Data: x})
 								}
-								conn.WriteMessage(websocket.BinaryMessage, ZModemSZStart)
+								ws.writeMessage(websocket.BinaryMessage, ZModemSZStart)
 							}
 						}
 					} else if x, ok := matchRZStart(buff[:n]); ok {
 						if ws.DisableZModemRZ {
-							conn.WriteJSON(&message{Type: messageTypeAlert, Data: []byte("rz upload is disabled")})
+							ws.writeJSON(&message{Type: messageTypeAlert, Data: []byte("rz upload is disabled")})
 							w.Write(ZModemCancel)
 						} else {
 							ws.ZModemRZ = true
 							if len(x) != 0 {
-								conn.WriteJSON(&message{Type: messageTypeConsole, Data: x})
+								ws.writeJSON(&message{Type: messageTypeConsole, Data: x})
 							}
-							conn.WriteMessage(websocket.BinaryMessage, ZModemRZStarts[matchRZStartIndex(buff[:n])])
+							ws.writeMessage(websocket.BinaryMessage, ZModemRZStarts[matchRZStartIndex(buff[:n])])
 						}
 					} else {
-						conn.WriteJSON(&message{Type: t, Data: buff[:n]})
+						ws.writeJSON(&message{Type: t, Data: buff[:n]})
 					}
 				}
 			}
