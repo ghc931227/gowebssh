@@ -86,6 +86,19 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Delete previous releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          # 删除旧的 release 条目（保留 git tag，仅当前版本除外）
+          gh release list --json tagName --jq '.[].tagName' | while read -r tag; do
+            if [ "$tag" != "${{ github.ref_name }}" ]; then
+              echo "Deleting release $tag"
+              gh release delete "$tag" --yes
+            fi
+          done
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
