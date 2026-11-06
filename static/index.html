@@ -81,6 +81,12 @@
             position: relative;
             flex: 1;
             background: #000;
+            /* SFTP 面板打开时终端让位收窄（与面板宽度保持一致） */
+            transition: margin-right .15s ease;
+        }
+
+        body.sftp-open #session-stack {
+            margin-right: min(var(--sftp-w, 420px), 90vw);
         }
 
         .session-pane {
@@ -240,8 +246,9 @@
             position: fixed;
             top: 0;
             right: 0;
-            width: 420px;
+            width: min(var(--sftp-w, 420px), 90vw);
             max-width: 90vw;
+            transition: width .15s ease;
             height: 100%;
             background: #fff;
             box-shadow: -2px 0 10px rgba(0, 0, 0, .3);
@@ -268,10 +275,54 @@
 
         #sftp-panel .sftp-toolbar {
             display: flex;
+            flex-wrap: wrap;
             gap: 6px;
             padding: 6px 8px;
             background: #ecf0f1;
             border-bottom: 1px solid #ddd;
+        }
+
+        #sftp-progress {
+            padding: 6px 8px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+        }
+
+        #sftp-progress .sftp-progress-head {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #sftp-progress .sftp-progress-head span {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #sftp-progress .sftp-progress-bar {
+            height: 6px;
+            margin: 4px 0;
+            background: #e1e5e8;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #sftp-progress .sftp-progress-bar span {
+            display: block;
+            width: 0;
+            height: 100%;
+            background: #3c8dbc;
+            transition: width .2s;
+        }
+
+        #sftp-progress .sftp-progress-detail {
+            color: #666;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         #sftp-list {
@@ -292,7 +343,7 @@
         }
 
         #sftp-list td.sftp-name {
-            max-width: 170px;
+            max-width: 280px;
             overflow: hidden;
             text-overflow: ellipsis;
         }
@@ -305,6 +356,55 @@
 
         #sftp-list .sftp-file {
             cursor: pointer;
+        }
+
+        /* 行悬停背景，配合操作按钮的聚焦感 */
+        #sftp-list tbody tr {
+            transition: background .12s;
+        }
+
+        #sftp-list tbody tr:hover {
+            background: #f4f8fb;
+        }
+
+        /* ===== 行内操作按钮：安静文本样式，悬停着色 ===== */
+        #sftp-list .sftp-act {
+            border: 0;
+            background: none;
+            padding: 2px 6px;
+            font-size: 12px;
+            line-height: 18px;
+            border-radius: 3px;
+            color: #7f92a3;
+            cursor: pointer;
+            transition: color .15s, background .15s;
+        }
+
+        #sftp-list .sftp-act:hover,
+        #sftp-list .sftp-act:focus {
+            outline: none;
+            background: #e8f0f7;
+        }
+
+        #sftp-list .sftp-act-dl:hover,
+        #sftp-list .sftp-act-dl:focus {
+            color: #2b7bbb;
+        }
+
+        #sftp-list .sftp-act-ren:hover,
+        #sftp-list .sftp-act-ren:focus {
+            color: #2c3e50;
+        }
+
+        /* 删除：默认弱化灰，悬停变红 + 浅红底，避免满屏红色且防误点 */
+        #sftp-list .sftp-act-del {
+            color: #b6c2cd;
+        }
+
+        #sftp-list .sftp-act-del:hover,
+        #sftp-list .sftp-act-del:focus {
+            color: #e74c3c;
+            background: #fdeceb;
         }
 
         /* ===== 新建文件文本编辑弹窗 ===== */
@@ -488,7 +588,18 @@
         <button type="button" class="btn btn-sm btn-default" id="sftp-mkdir" data-i18n="sftp.mkdir">新建目录</button>
         <button type="button" class="btn btn-sm btn-default" id="sftp-newfile" data-i18n="sftp.newfile">新建文件</button>
         <button type="button" class="btn btn-sm btn-default" id="sftp-upload-btn" data-i18n="sftp.upload">上传文件</button>
+        <button type="button" class="btn btn-sm btn-default" id="sftp-upload-dir-btn" data-i18n="sftp.uploadDir">上传文件夹</button>
         <input id="sftp-upload" type="file" multiple style="display:none;"/>
+        <input id="sftp-upload-dir" type="file" webkitdirectory directory multiple style="display:none;"/>
+    </div>
+    <div id="sftp-progress" class="hide">
+        <div class="sftp-progress-head">
+            <span id="sftp-progress-text"></span>
+            <button type="button" class="btn btn-xs btn-default" id="sftp-progress-retry" style="display:none;" data-i18n="sftp.retry">重试失败项</button>
+            <button type="button" class="btn btn-xs btn-default" id="sftp-progress-close" data-i18n="btn.close">关闭</button>
+        </div>
+        <div class="sftp-progress-bar"><span id="sftp-progress-fill"></span></div>
+        <div class="sftp-progress-detail" id="sftp-progress-detail"></div>
     </div>
     <div id="sftp-list"></div>
 </div>

@@ -525,6 +525,19 @@ jQuery(function($){
         });
 
         term.open(this.container);
+
+        // 容器尺寸变化（SFTP 面板开合、窗口缩放等）时自动重新 fit 并同步 PTY，
+        // 比只监听 window.resize 可靠，布局变化也能实时同步
+        if (window.ResizeObserver) {
+            this.resize_observer = new window.ResizeObserver(function () {
+                clearTimeout(self._fit_timer);
+                self._fit_timer = setTimeout(function () {
+                    self.resize_to_window();
+                }, 100);
+            });
+            this.resize_observer.observe(this.container);
+        }
+
         this.setup_search_box();
     };
 
@@ -812,7 +825,11 @@ jQuery(function($){
         sock.onopen = function () {
             self.state = CONNECTED;
             self.resized = false;
-            self.fit();
+            // 新 websocket 的服务端 PTY 已重置为默认 80x24，必须清空缓存的行列数，
+            // 强制重新发送 resize 同步，否则窗口尺寸未变化时不会发送，导致命令提前折行
+            self.cols = null;
+            self.rows = null;
+            self.resize_to_window();
             self.focus();
             title_element.text = url_opts_data.title || self.title;
             // 登录后命令：优先取连接表单，其次 URL 参数（重连后同样执行，因为服务端会重新登录）
@@ -920,6 +937,11 @@ jQuery(function($){
     Session.prototype.dispose = function () {
         var self = this;
         self.user_closed = true;
+        if (self.resize_observer) {
+            self.resize_observer.disconnect();
+            self.resize_observer = undefined;
+        }
+        clearTimeout(self._fit_timer);
         if (self.sock) {
             try { self.sock.close(1000); } catch (e) {}
             self.sock = undefined;
@@ -980,16 +1002,20 @@ jQuery(function($){
         }
         if (sftp_panel.hasClass('hide')) {
             sftp_panel.removeClass('hide');
+            // 让终端容器收窄，配合 ResizeObserver 自动重新 fit 并同步 PTY 列数
+            $('body').addClass('sftp-open');
             if (!sftp_path_input.val()) {
                 sftp_list('');
             }
         } else {
             sftp_panel.addClass('hide');
+            $('body').removeClass('sftp-open');
         }
     });
 
     $('#sftp-close').on('click', function () {
         sftp_panel.addClass('hide');
+        $('body').removeClass('sftp-open');
     });
 
     function sftp_url(action, params) {
@@ -1031,11 +1057,13 @@ jQuery(function($){
         $.each(items, function (i, item) {
             var full = sftp_path_input.val().replace(/\/$/, '') + '/' + item.name;
             var actions = '';
-            if (!item.isdir) {
-                actions += '<button type="button" class="btn btn-xs btn-primary btn-sftp-dl" data-path="' + full + '">' + t('btn.download') + '</button> ';
+            if (item.isdir) {
+                actions += '<button type="button" class="sftp-act sftp-act-dl btn-sftp-zip" data-path="' + full + '">' + t('btn.download') + '</button> ';
+            } else {
+                actions += '<button type="button" class="sftp-act sftp-act-dl btn-sftp-dl" data-path="' + full + '">' + t('btn.download') + '</button> ';
             }
-            actions += '<button type="button" class="btn btn-xs btn-default btn-sftp-ren" data-path="' + full + '">' + t('btn.rename') + '</button> ';
-            actions += '<button type="button" class="btn btn-xs btn-danger btn-sftp-del" data-path="' + full + '">' + t('btn.delete') + '</button>';
+            actions += '<button type="button" class="sftp-act sftp-act-ren btn-sftp-ren" data-path="' + full + '">' + t('btn.rename') + '</button> ';
+            actions += '<button type="button" class="sftp-act sftp-act-del btn-sftp-del" data-path="' + full + '">' + t('btn.delete') + '</button>';
             rows += '<tr>' +
                 '<td class="sftp-name ' + (item.isdir ? 'sftp-dir' : 'sftp-file') + '" data-path="' + full + '" data-isdir="' + item.isdir + '">' +
                 (item.isdir ? '📁 ' : '📄 ') + item.name + '</td>' +
@@ -1050,6 +1078,16 @@ jQuery(function($){
             '<th>' + t('th.name') + '</th><th>' + t('th.size') + '</th><th>' + t('th.perm') + '</th><th>' + t('th.mtime') + '</th><th>' + t('th.actions') + '</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table>'
         );
+        // 面板宽度自适应：临时 width:auto 测表格自然内容宽度（单元格均 nowrap），
+        // 取 max(420, 自然宽+缓冲) 且不超过 90vw，保证无横向滚动条
+        var tbl = $('#sftp-list table')[0];
+        if (tbl) {
+            tbl.style.width = 'auto';
+            var natural = tbl.offsetWidth;
+            tbl.style.width = '';
+            var w = Math.min(Math.max(natural + 18, 420), Math.round(window.innerWidth * 0.9));
+            document.body.style.setProperty('--sftp-w', w + 'px');
+        }
 
         // 目录/文件点击
         $('#sftp-list .sftp-name').off('click').on('click', function () {
@@ -1063,9 +1101,14 @@ jQuery(function($){
         $('#sftp-list .btn-sftp-dl').off('click').on('click', function () {
             sftp_download($(this).data('path'));
         });
+        $('#sftp-list .btn-sftp-zip').off('click').on('click', function () {
+            sftp_zip_download($(this).data('path'));
+        });
         $('#sftp-list .btn-sftp-del').off('click').on('click', function () {
             var p = $(this).data('path');
-            if (!confirm(t('msg.confirmDelete') + p + ' ?')) {
+            var isdir = $(this).closest('tr').find('.sftp-name').data('isdir');
+            var tip = isdir ? t('msg.confirmDeleteDir') : t('msg.confirmDelete');
+            if (!confirm(tip + p + ' ?')) {
                 return;
             }
             $.post(sftp_url('/sftp/delete', { id: active_session.id }), { id: active_session.id, path: p })
@@ -1113,6 +1156,38 @@ jQuery(function($){
             });
         }).catch(function (e) {
             toastr.error(t('msg.downloadFail') + e.message);
+        });
+    }
+
+    // 目录打包下载：先探测条目/大小，再走浏览器原生下载（边读边写，不用 blob）
+    function sftp_zip_download(path) {
+        if (!active_session || !active_session.id) {
+            return;
+        }
+        var sid = active_session.id;
+        $.ajax({
+            url: sftp_url('/sftp/zipinfo', { id: sid, path: path }),
+            type: 'get',
+            dataType: 'json'
+        }).done(function (res) {
+            if (res.exceeds) {
+                toastr.error(t('msg.zipOverflow') + bytesHuman(res.limitBytes) + ' / ' + res.limitFiles + t('msg.entriesWord'));
+                return;
+            }
+            var info = t('msg.zipFiles') + res.files + t('msg.filesCount') + '\n' + t('msg.zipBytes') + bytesHuman(res.bytes);
+            if (!confirm(t('msg.zipConfirmTitle') + ': ' + path + '\n' + info)) {
+                return;
+            }
+            var name = path.split('/').filter(function (s) { return !!s; }).pop() || 'download';
+            var a = document.createElement('a');
+            a.href = sftp_url('/sftp/zip', { id: sid, path: path });
+            a.download = name + '.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            toastr.info(t('msg.zipStarted'));
+        }).fail(function (resp) {
+            sftp_err(resp);
         });
     }
 
@@ -1258,6 +1333,230 @@ jQuery(function($){
         }
 
         uploadNext();
+    });
+
+    // 文件夹上传：webkitRelativePath 保留目录结构，先逐级建目录，再有限并发上传文件
+    var UPLOAD_CONCURRENCY = 3;
+    var dir_job = null;
+
+    $('#sftp-upload-dir-btn').on('click', function () {
+        if (!active_session || !active_session.id) {
+            toastr.warning(t('msg.noSession'));
+            return;
+        }
+        $('#sftp-upload-dir').val('').click();
+    });
+
+    $('#sftp-progress-close').on('click', function () {
+        $('#sftp-progress').addClass('hide');
+    });
+
+    function sftp_progress_update(job) {
+        var s = job.stats;
+        var inflightBytes = 0;
+        for (var k in s.inflight) {
+            inflightBytes += s.inflight[k];
+        }
+        var doneBytes = Math.min(s.totalBytes, s.doneBytes + inflightBytes);
+        var pct = s.totalBytes > 0
+            ? Math.floor(doneBytes / s.totalBytes * 100)
+            : (s.finished && s.doneFiles >= s.totalFiles ? 100 : 0);
+        $('#sftp-progress-fill').css('width', pct + '%');
+        $('#sftp-progress-text').text(
+            t('msg.updirTitle') + ' ' + s.doneFiles + '/' + s.totalFiles + t('msg.filesCount') +
+            ' · ' + bytesHuman(doneBytes) + ' / ' + bytesHuman(s.totalBytes)
+        );
+        var detail;
+        var names = Object.keys(s.current);
+        if (s.finished) {
+            if (s.failures.length) {
+                detail = t('msg.updirFailed') + s.failures.length + t('msg.filesCount') + ': ' +
+                    s.failures.slice(0, 3).map(function (f) { return f.name; }).join(', ');
+            } else {
+                detail = t('msg.updirDone');
+            }
+        } else if (names.length) {
+            detail = t('msg.uploading') + names.slice(0, 3).join(', ');
+        } else {
+            detail = t('msg.updirPrepare');
+        }
+        $('#sftp-progress-detail').text(detail);
+    }
+
+    // 目录前缀去重 + 按深度排序后逐个 MkdirAll（后端幂等）
+    function run_mkdirs(job, items, next) {
+        var set = {};
+        items.forEach(function (it) {
+            var parts = it.rel.split('/');
+            for (var i = 1; i < parts.length; i++) {
+                set['/' + parts.slice(0, i).join('/')] = true;
+            }
+        });
+        var dirs = Object.keys(set).sort(function (a, b) {
+            return a.split('/').length - b.split('/').length;
+        });
+        var i = 0;
+        function step() {
+            if (i >= dirs.length) {
+                next(true);
+                return;
+            }
+            var rel = dirs[i++];
+            $.post(sftp_url('/sftp/mkdir', { id: job.sid }), { id: job.sid, path: job.base + rel })
+                .done(function () { step(); })
+                .fail(function (resp) {
+                    job.stats.mkdirFailed = true;
+                    job.stats.failures.push({ name: rel, path: job.base + rel, error: resp.responseText || resp.statusText });
+                    job.stats.finished = true;
+                    sftp_progress_update(job);
+                    toastr.error(t('msg.updirMkdirFail') + rel + ': ' + (resp.responseText || resp.statusText));
+                    $('#sftp-progress-retry').show();
+                    sftp_list(sftp_path_input.val());
+                    next(false);
+                });
+        }
+        step();
+    }
+
+    function run_upload_queue(job, items) {
+        var s = job.stats;
+        s.totalFiles = items.length;
+        s.totalBytes = items.reduce(function (sum, it) { return sum + it.file.size; }, 0);
+        s.doneFiles = 0;
+        s.doneBytes = 0;
+        s.inflight = {};
+        s.current = {};
+        s.failures = [];
+        s.finished = false;
+        s.idx = 0;
+        s.active = 0;
+        sftp_progress_update(job);
+
+        function finish() {
+            s.finished = true;
+            sftp_progress_update(job);
+            if (s.failures.length) {
+                toastr.error(t('msg.updirDoneFail') + s.failures.length + t('msg.filesCount'));
+                $('#sftp-progress-retry').show();
+            } else {
+                $('#sftp-progress-retry').hide();
+                toastr.success(t('msg.updirDone'));
+            }
+            sftp_list(sftp_path_input.val());
+        }
+
+        function done(it, ok, errText) {
+            delete s.current[it.rel];
+            delete s.inflight[it.rel];
+            s.active--;
+            if (ok) {
+                s.doneFiles++;
+                s.doneBytes += it.file.size;
+            } else {
+                s.failures.push({ name: it.rel, path: job.base + '/' + it.rel, error: errText || '', item: it });
+            }
+            sftp_progress_update(job);
+            pump();
+        }
+
+        function upload_one(it) {
+            s.active++;
+            s.current[it.rel] = true;
+            var form = new FormData();
+            form.append('id', job.sid);
+            form.append('path', job.base + '/' + it.rel);
+            form.append('file', it.file);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/sftp/put', true);
+            xhr.upload.onprogress = function (e) {
+                if (e.lengthComputable) {
+                    s.inflight[it.rel] = e.loaded;
+                    sftp_progress_update(job);
+                }
+            };
+            xhr.onload = function () { done(it, xhr.status === 200, xhr.responseText); };
+            xhr.onerror = function () { done(it, false, 'network error'); };
+            xhr.send(form);
+        }
+
+        function pump() {
+            while (s.active < UPLOAD_CONCURRENCY && s.idx < items.length) {
+                upload_one(items[s.idx++]);
+            }
+            if (s.active === 0 && s.idx >= items.length) {
+                finish();
+            }
+        }
+
+        pump();
+    }
+
+    $('#sftp-upload-dir').on('change', function () {
+        var file_list = Array.prototype.slice.call(this.files || []);
+        if (!file_list.length || !active_session || !active_session.id) {
+            return;
+        }
+        var base = sftp_path_input.val().replace(/\/$/, '');
+        var items = [];
+        var totalBytes = 0;
+        file_list.forEach(function (f) {
+            var rel = (f.webkitRelativePath || f.name).replace(/^\/+/, '');
+            items.push({ file: f, rel: rel });
+            totalBytes += f.size;
+        });
+        dir_job = {
+            sid: active_session.id,
+            base: base,
+            items: items,
+            stats: {
+                totalFiles: items.length,
+                totalBytes: totalBytes,
+                doneFiles: 0,
+                doneBytes: 0,
+                inflight: {},
+                current: {},
+                failures: [],
+                mkdirFailed: false,
+                finished: false
+            }
+        };
+        $('#sftp-progress').removeClass('hide');
+        $('#sftp-progress-retry').hide();
+        sftp_progress_update(dir_job);
+        run_mkdirs(dir_job, items, function (ok) {
+            if (ok) {
+                run_upload_queue(dir_job, items);
+            }
+        });
+    });
+
+    $('#sftp-progress-retry').on('click', function () {
+        if (!dir_job || !dir_job.stats.failures.length) {
+            return;
+        }
+        var retryItems = [];
+        if (dir_job.stats.mkdirFailed) {
+            // 目录创建失败时重跑全部文件（目录创建幂等，重跑安全）
+            retryItems = dir_job.items.slice();
+        } else {
+            dir_job.stats.failures.forEach(function (f) {
+                if (f.item) {
+                    retryItems.push(f.item);
+                }
+            });
+        }
+        if (!retryItems.length) {
+            return;
+        }
+        dir_job.stats.mkdirFailed = false;
+        dir_job.stats.failures = [];
+        $('#sftp-progress-retry').hide();
+        run_mkdirs(dir_job, retryItems, function (ok) {
+            if (ok) {
+                run_upload_queue(dir_job, retryItems);
+            }
+        });
     });
 
     // ==========================================================================

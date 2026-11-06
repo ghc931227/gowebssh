@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -92,6 +94,21 @@ var (
 	authPassword string
 	store        = newSessionStore()
 )
+
+// 打包下载上限：总字节 4GB、条目 20 万，超过直接拒绝，避免拖垮服务端
+const (
+	sftpZipMaxBytes   int64 = 4 * 1024 * 1024 * 1024
+	sftpZipMaxEntries       = 200000
+)
+
+// sftpZipPath 从 GET query 或表单中取 path
+func sftpZipPath(r *http.Request) string {
+	p := r.FormValue("path")
+	if p == "" {
+		p = r.URL.Query().Get("path")
+	}
+	return p
+}
 
 // basicAuth 中间件：配置了 -auth 时对所有路由启用 HTTP Basic 认证
 func basicAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -421,6 +438,10 @@ func main() {
 			return
 		}
 		if err := webssh.SftpDelete(p); err != nil {
+			if errors.Is(err, internal.ErrSftpInvalidPath) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -440,6 +461,67 @@ func main() {
 			return
 		}
 		_, _ = io.WriteString(w, `{"status": 0}`)
+	}))
+
+	// 打包下载探测：只统计条目数与总大小，供前端下载前确认
+	http.HandleFunc("/sftp/zipinfo", sftpGuard(func(webssh *internal.WebSSH, w http.ResponseWriter, r *http.Request) {
+		p := sftpZipPath(r)
+		if p == "" {
+			http.Error(w, "path is required", http.StatusBadRequest)
+			return
+		}
+		scan, err := webssh.SftpScan(r.Context(), p, sftpZipMaxEntries, sftpZipMaxBytes)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Add("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"files":      scan.Files,
+			"dirs":       scan.Dirs,
+			"bytes":      scan.Bytes,
+			"skipped":    len(scan.Skipped),
+			"exceeds":    scan.Truncated,
+			"limitBytes": sftpZipMaxBytes,
+			"limitFiles": sftpZipMaxEntries,
+		})
+	}))
+
+	// 打包下载：先统计（超限直接 413，此时不写响应头），再流式写 zip，不落盘
+	http.HandleFunc("/sftp/zip", sftpGuard(func(webssh *internal.WebSSH, w http.ResponseWriter, r *http.Request) {
+		p := sftpZipPath(r)
+		if p == "" {
+			http.Error(w, "path is required", http.StatusBadRequest)
+			return
+		}
+		scan, err := webssh.SftpScan(r.Context(), p, sftpZipMaxEntries, sftpZipMaxBytes)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if scan.Truncated {
+			http.Error(w, fmt.Sprintf("目录过大，超过打包上限（%d GB / %d 条目），请缩小范围后重试",
+				sftpZipMaxBytes/(1024*1024*1024), sftpZipMaxEntries), http.StatusRequestEntityTooLarge)
+			return
+		}
+		for _, skipped := range scan.Skipped {
+			log.Printf("[webssh] sftp zip skipped: %s", skipped)
+		}
+
+		name := path.Base(strings.TrimSuffix(p, "/"))
+		if name == "" || name == "." || name == "/" {
+			name = "download"
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(name+".zip")))
+		w.Header().Set("Cache-Control", "no-store")
+		// 关闭反向代理缓冲，保证边读边写
+		w.Header().Set("X-Accel-Buffering", "no")
+		// zip 压缩后长度不可预知，不设 Content-Length，走 chunked 边读边写
+		_ = http.NewResponseController(w).Flush()
+		if err := webssh.SftpZip(r.Context(), scan.Entries, w); err != nil {
+			log.Printf("[webssh] sftp zip aborted: %v", err)
+		}
 	}))
 
 	store.cleanupLoop(sessionTTL)
